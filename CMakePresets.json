@@ -1,0 +1,53 @@
+{
+    "version": 6,
+    "cmakeMinimumRequired": {
+      "major": 3,
+      "minor": 23,
+      "patch": 0
+    },
+    "configurePresets": [
+    {
+      "name": "config-base",
+      "hidden": true,
+      "displayName": "base Configuration",
+      "binaryDir": "${sourceDir}/build/${presetName}"
+    },
+    {
+        "name": "Debug",
+        "displayName": "Config Debug",
+        "description": "Sets debug build type",
+        "inherits": "config-base",
+        "cacheVariables": {
+            "CMAKE_BUILD_TYPE": "Debug"
+        }
+      },
+      {
+        "name": "Release",
+        "displayName": "Config Release",
+        "description": "Sets release build type",
+        "inherits": "config-base",
+        "cacheVariables": {
+            "CMAKE_BUILD_TYPE": "Release"
+        }
+      }
+  ],
+  "buildPresets": [
+    {
+        "name": "build-base",
+        "hidden": true,
+        "configurePreset": "Debug",
+        "targets": "all"
+    },
+    {
+      "name": "Debug",
+      "displayName": "Build Debug",
+      "inherits": "build-base"
+    },
+    {
+      "name": "Release",
+      "displayName": "Build Release",
+      "inherits": "build-base",
+      "configurePreset": "Release"
+    }
+  ]
+}

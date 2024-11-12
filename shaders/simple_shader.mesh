@@ -1,0 +1,67 @@
+#version 460
+#extension GL_EXT_mesh_shader : enable
+
+layout (local_size_x=1) in;
+
+layout (triangles) out;
+
+#define MESHLET_MAX_INDEXED_PRIMITIVES_NUM 128
+#define MESHLET_MAX_VERTICES_NUM 64
+
+layout(max_vertices=MESHLET_MAX_VERTICES_NUM, max_primitives=MESHLET_MAX_INDEXED_PRIMITIVES_NUM) out;
+layout(triangles) out;
+
+struct meshlet_t {
+    int numPrimitives, numVertices;
+    uvec4 indexedPrimitives[MESHLET_MAX_INDEXED_PRIMITIVES_NUM];
+    vec4 vertices[MESHLET_MAX_VERTICES_NUM];
+};
+
+layout(std140, binding = 0) buffer Meshlet {
+    meshlet_t meshletDescs[];
+} meshletBuffer;
+
+layout( push_constant ) uniform constants
+{
+	mat4 transform_matrix;
+} PushConstants;
+
+// task shader input
+
+struct Task {
+    uint    baseID;
+    uint deltaIDs[1];
+};
+taskPayloadSharedEXT Task IN;
+
+// gl_WorkGroupID.x runs from [0 .. parentTask.groupCountX - 1]
+uint meshletID = IN.baseID + IN.deltaIDs[gl_WorkGroupID.x];
+
+
+void main() {
+
+    uint vertCount = 3;
+    uint primCount = 1;
+    SetMeshOutputsEXT(vertCount, primCount);
+
+    meshlet_t meshlet = meshletBuffer.meshletDescs[meshletID];
+
+    /*
+    gl_MeshVerticesEXT[0].gl_Position = vec4(0.3, 0, 0, 1.0);
+    gl_MeshVerticesEXT[1].gl_Position = vec4(0.5, 0.5, 0, 1.0);
+    gl_MeshVerticesEXT[2].gl_Position = vec4(0.7, 0, 0, 1.0);
+
+    gl_PrimitiveTriangleIndicesEXT[0] = uvec3(0, 2, 1);
+    */
+
+
+    gl_MeshVerticesEXT[0].gl_Position = PushConstants.transform_matrix * vec4(meshlet.vertices[0].xyz, 1.0);
+    gl_MeshVerticesEXT[1].gl_Position = PushConstants.transform_matrix * vec4(meshlet.vertices[1].xyz, 1.0);
+    gl_MeshVerticesEXT[2].gl_Position = PushConstants.transform_matrix * vec4(meshlet.vertices[2].xyz, 1.0);
+
+    gl_PrimitiveTriangleIndicesEXT[0] = meshlet.indexedPrimitives[0].xyz;
+
+
+    gl_MeshPrimitivesEXT[0].gl_PrimitiveID = 69;
+
+}
