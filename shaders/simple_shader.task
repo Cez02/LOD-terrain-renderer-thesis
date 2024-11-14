@@ -1,33 +1,33 @@
 #version 460
+
+#extension GL_GOOGLE_include_directive : enable
+
 #extension GL_EXT_mesh_shader : require
+
+#include "common.h"
 
 layout (local_size_x=1) in;
 
-#define MESHLET_MAX_INDEXED_PRIMITIVES_NUM 128
-#define MESHLET_MAX_VERTICES_NUM 64
-
-struct meshlet_t {
-    int numPrimitives, numVertices;
-    uvec4 indexedPrimitives[MESHLET_MAX_INDEXED_PRIMITIVES_NUM];
-    vec4 vertices[MESHLET_MAX_VERTICES_NUM];
-};
-
-layout(std140, binding = 0) buffer Meshlet {
-    meshlet_t meshletDescs[];
-} meshletBuffer;
+layout(std430, binding = 0) buffer HeightmapData {
+    float m_Heights[];
+} heightmapData;
 
 uint baseID = gl_WorkGroupID.x;
 uint laneID = gl_LocalInvocationID.x;
 
 struct Task
 {
-  uint      baseID;
-  uint   deltaIDs[1];
+  uint baseID;
+  uint deltaIDs[128];
 };
 
 taskPayloadSharedEXT Task OUT;
 
 
 void main() {
-    EmitMeshTasksEXT(1, 1, 1);
+
+    for(int i = 0; i<49; i++)
+    OUT.deltaIDs[i] = i;
+
+    EmitMeshTasksEXT(49, 1, 1);
 }

@@ -19,17 +19,25 @@ int main(){
 
     log("Window initializaiton finished. Initializing vulkan...");
 
-    Renderer mainRenderer("shaders/simple_shader.vert.spv", "shaders/simple_shader.frag.spv");
+    Renderer mainRenderer;
 
+    // Vulkan setup
     mainRenderer.initVulkan(&mainWindow);
+
+
+    // Scene setup
     log("Vulkan initialized. Initializaing scene data...");
+    SceneData scene;
+    scene.getHeightmaps().emplace_back();
+    mainRenderer.initVKSceneElements(scene);
 
-    mainRenderer.getCamera() = Camera();
-    mainRenderer.getCamera().m_Position = glm::vec3(0, 0, 0);
-    mainRenderer.getCamera().m_Rotation = glm::quat(glm::vec3(0, 0, 0));
+    scene.getCamera() = Camera();
+    scene.getCamera().m_Position = glm::vec3(0, 0, 0);
+    scene.getCamera().m_Rotation = glm::quat(glm::vec3(0, 0, 0));
 
+
+    // App logic
     log("Setup complete. Starting application loop.");
-
     glm::vec3 playerPosition = glm::vec3(0.0f);
     glm::vec3 playerRotation = glm::vec3(0.0f);
 
@@ -96,12 +104,12 @@ int main(){
 
         /* Draw */
 
-        mainRenderer.drawFrame();
+        mainRenderer.drawFrame(scene);
 
         deltaTime = abs(glfwGetTime() - time);
         time = glfwGetTime();
 
     }
 
-    mainRenderer.cleanup();
+    mainRenderer.cleanup(scene);
 }

@@ -3,6 +3,7 @@
 #include "src/tr_window.hpp"
 #include "src/tr_mesh.hpp"
 #include "src/tr_camera.hpp"
+#include "src/tr_scenedata.hpp"
 
 #include <string>
 #include <vector>
@@ -53,10 +54,12 @@ private:
 
     VkDescriptorSetLayout m_DescriptorSetLayout;
     VkDescriptorPool m_DescriptorPool;
-    std::vector<VkDescriptorSet> m_DescriptorSets;
+
+    VkImage m_DepthImage;
+    VkDeviceMemory m_DepthImageMemory;
+    VkImageView m_DepthImageView;
 
     VkPipelineLayout m_PipelineLayout;
-    std::string m_VertexShaderPath, m_FragmentShaderPath;
     VkPipeline m_GraphicsPipeline;
 
     VkCommandPool m_CommandPool;
@@ -72,7 +75,6 @@ private:
 
     Window *m_AppWindow;
 
-    Mesh_vk m_TestMesh;
 
 
     const std::vector<const char*> VALIDATION_LAYERS = {
@@ -98,9 +100,17 @@ private:
             void* pUserData);
     void setupDebugMessenger();
 
+    uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
+
     QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device);
     bool isDeviceSuitable(VkPhysicalDevice device);
     bool checkDeviceExtensionSupport(VkPhysicalDevice device);
+
+    VkFormat findSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features);
+    VkFormat findDepthFormat();
+
+    VkImageView createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags);
+    void createImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
 
     SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device);
     VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats);
@@ -109,7 +119,7 @@ private:
 
     VkShaderModule createShaderModule(const std::vector<char>& code);
 
-    void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+    void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex, SceneData &scene);
 
     bool checkValidationLayerSupport();
 
@@ -131,13 +141,13 @@ private:
 
     void createDescriptorPool();
 
-    void createDescriptorSets();
-
-    void createGraphicsPipeline(const std::string &vertFilepath, const std::string &fragFilepath);
+    void createGraphicsPipeline();
 
     void createFramebuffers();
 
     void createCommandPool();
+
+    void createDepthResources();
 
     void createCommandBuffers();
 
@@ -145,13 +155,15 @@ private:
 
 public:
 
-    Renderer(const std::string &vertFilepath, const std::string &fragFilepath);
+    Renderer();
 
     void initVulkan(Window *appWindow);
 
-    void drawFrame();
+    void initVKSceneElements(SceneData &scene);
 
-    void cleanup();
+    void drawFrame(SceneData &scene);
+
+    void cleanup(SceneData loadedScene);
 
     Camera& getCamera();
 };

@@ -20,6 +20,7 @@ target_link_libraries(terrain_renderer
         glfw
         vulkan
         glm::glm
+        shaderc_combined
 )
 
 target_include_directories(terrain_renderer
