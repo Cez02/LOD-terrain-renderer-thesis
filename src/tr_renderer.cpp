@@ -4,12 +4,15 @@
 
 #include "src/tr_logger.hpp"
 #include "src/tr_appconfig.hpp"
+#include "src/tr_shadercompiler.hpp"
 
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
 #include <glm/glm.hpp>
 #include <glm/ext.hpp>
+
+#include <vulkan/vk_enum_string_helper.h>
 
 #include <stdexcept>
 #include <cstring>
@@ -659,10 +662,15 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
     renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
     renderPassInfo.pClearValues = clearValues.data();
 
+
+//    log("Begin render pass...");
+
     vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_GraphicsPipeline);
 
+
+//    log("Setting up viewport stuff");
 
     VkViewport viewport{};
     viewport.x = 0.0f;
@@ -684,36 +692,52 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
             m_Camera.getViewMatrix();
 
 
+//    log("Pushing transform matrix as constant");
+
     //upload the matrix to the GPU via push constants
     vkCmdPushConstants(commandBuffer, m_PipelineLayout, VK_SHADER_STAGE_MESH_BIT_EXT, 0, sizeof(glm::mat4), &constants);
 
+
+//    log("Binding and drawing heightmaps...");
     // draw meshes
     for(auto & heightmap : scene.getHeightmaps()) {
         heightmap.Bind(commandBuffer, m_PipelineLayout, m_CurrentFrame);
-        heightmap.Draw(commandBuffer);
+        //heightmap.Draw(commandBuffer);
     }
 
     vkCmdEndRenderPass(commandBuffer);
 
+
+//    log("Ending command buffer");
     if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
         throw std::runtime_error("failed to record command buffer!");
     }
 }
 
 void Renderer::createDescriptorSetLayout() {
-    VkDescriptorSetLayoutBinding meshletLayoutBinding{};
-    meshletLayoutBinding.binding = 0;
-    meshletLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    meshletLayoutBinding.descriptorCount = 1;
+    VkDescriptorSetLayoutBinding heightmapDataLayoutBinding{};
+    heightmapDataLayoutBinding.binding = 0;
+    heightmapDataLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    heightmapDataLayoutBinding.descriptorCount = 1;
+    heightmapDataLayoutBinding.stageFlags = VK_SHADER_STAGE_MESH_BIT_EXT | VK_SHADER_STAGE_TASK_BIT_EXT | VK_SHADER_STAGE_FRAGMENT_BIT;
+    heightmapDataLayoutBinding.pImmutableSamplers = nullptr;
 
-    meshletLayoutBinding.stageFlags = VK_SHADER_STAGE_MESH_BIT_EXT | VK_SHADER_STAGE_TASK_BIT_EXT | VK_SHADER_STAGE_FRAGMENT_BIT;
+    VkDescriptorSetLayoutBinding meshletDescriptionLayoutBinding{};
+    meshletDescriptionLayoutBinding.binding = 1;
+    meshletDescriptionLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    meshletDescriptionLayoutBinding.descriptorCount = 1;
+    meshletDescriptionLayoutBinding.stageFlags = VK_SHADER_STAGE_MESH_BIT_EXT | VK_SHADER_STAGE_TASK_BIT_EXT | VK_SHADER_STAGE_FRAGMENT_BIT;
+    meshletDescriptionLayoutBinding.pImmutableSamplers = nullptr;
 
-    meshletLayoutBinding.pImmutableSamplers = nullptr;
+    VkDescriptorSetLayoutBinding bindings[2] = {
+            heightmapDataLayoutBinding,
+            meshletDescriptionLayoutBinding
+    };
 
     VkDescriptorSetLayoutCreateInfo layoutInfo{};
     layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    layoutInfo.bindingCount = 1;
-    layoutInfo.pBindings = &meshletLayoutBinding;
+    layoutInfo.bindingCount = 2;
+    layoutInfo.pBindings = bindings;
 
     if (vkCreateDescriptorSetLayout(m_Device, &layoutInfo, nullptr, &m_DescriptorSetLayout) != VK_SUCCESS) {
         throw std::runtime_error("failed to create descriptor set layout!");
@@ -723,13 +747,13 @@ void Renderer::createDescriptorSetLayout() {
 void Renderer::createDescriptorPool() {
     VkDescriptorPoolSize poolSize{};
     poolSize.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    poolSize.descriptorCount = MAX_FRAMES_IN_FLIGHT;
+    poolSize.descriptorCount = MAX_FRAMES_IN_FLIGHT + MAX_FRAMES_IN_FLIGHT;
 
     VkDescriptorPoolCreateInfo poolInfo{};
     poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     poolInfo.poolSizeCount = 1;
     poolInfo.pPoolSizes = &poolSize;
-    poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+    poolInfo.maxSets = static_cast<uint32_t>(2 * MAX_FRAMES_IN_FLIGHT);
 
     if (vkCreateDescriptorPool(m_Device, &poolInfo, nullptr, &m_DescriptorPool) != VK_SUCCESS) {
         throw std::runtime_error("failed to create descriptor pool!");
@@ -738,6 +762,8 @@ void Renderer::createDescriptorPool() {
 
 void Renderer::createGraphicsPipeline()
 {
+    shaders::CompileShaders();
+
     auto taskShaderCode = readFile("shaders/simple_shader.task.spv");
     auto meshShaderCode = readFile("shaders/simple_shader.mesh.spv");
     auto fragShaderCode = readFile("shaders/simple_shader.frag.spv");
@@ -879,13 +905,23 @@ void Renderer::createGraphicsPipeline()
     pipelineLayoutInfo.setLayoutCount = 1; // Optional
     pipelineLayoutInfo.pSetLayouts = &m_DescriptorSetLayout; // Optional
 
-    VkPushConstantRange push_constant;
-    push_constant.offset = 0;
-    push_constant.size = sizeof(glm::mat4);
-    push_constant.stageFlags = VK_SHADER_STAGE_MESH_BIT_EXT;
+    VkPushConstantRange push_constant_transform_matrix;
+    push_constant_transform_matrix.offset = 0;
+    push_constant_transform_matrix.size = sizeof(glm::mat4);
+    push_constant_transform_matrix.stageFlags = VK_SHADER_STAGE_MESH_BIT_EXT;
 
-    pipelineLayoutInfo.pushConstantRangeCount = 1; // Optional
-    pipelineLayoutInfo.pPushConstantRanges = &push_constant; // Optional
+    VkPushConstantRange push_constant_heightmap_info;
+    push_constant_heightmap_info.offset = sizeof(glm::mat4);
+    push_constant_heightmap_info.size = sizeof(HeightmapPushConstantData);
+    push_constant_heightmap_info.stageFlags = VK_SHADER_STAGE_TASK_BIT_EXT;
+
+    VkPushConstantRange pushConstants[3] = {
+            push_constant_heightmap_info,
+            push_constant_transform_matrix
+    };
+
+    pipelineLayoutInfo.pushConstantRangeCount = 2; // Optional
+    pipelineLayoutInfo.pPushConstantRanges = pushConstants; // Optional
 
     if (vkCreatePipelineLayout(m_Device, &pipelineLayoutInfo, nullptr, &m_PipelineLayout) != VK_SUCCESS) {
         throw std::runtime_error("failed to create pipeline layout!");
@@ -1102,20 +1138,20 @@ void Renderer::initVulkan(Window *appWindow)
 
 void Renderer::drawFrame(SceneData &scene)
 {
-//    log("=== Drawing frame ===");
+    log("=== Drawing frame ===");
 
-//    log("\tWaiting for fences...");
+    log("\tWaiting for fences...");
 
     vkWaitForFences(m_Device, 1, &m_InFlightFences[m_CurrentFrame], VK_TRUE, UINT64_MAX);
 
     vkResetFences(m_Device, 1, &m_InFlightFences[m_CurrentFrame]);
 
-//    log("\tGetting image...");
+    log("\tGetting image...");
 
     uint32_t imageIndex;
     vkAcquireNextImageKHR(m_Device, m_SwapChain, UINT64_MAX, m_ImageAvailableSemaphores[m_CurrentFrame], VK_NULL_HANDLE, &imageIndex);
 
-//    log("\tRecording command buffer...");
+    log("\tRecording command buffer...");
 
     vkResetCommandBuffer(m_CommandBuffers[m_CurrentFrame], 0);
     recordCommandBuffer(m_CommandBuffers[m_CurrentFrame], imageIndex, scene);
@@ -1138,7 +1174,7 @@ void Renderer::drawFrame(SceneData &scene)
     submitInfo.signalSemaphoreCount = 1;
     submitInfo.pSignalSemaphores = signalSemaphores;
 
-//    log("Submitting queue...");
+    log("Submitting queue...");
 
     if (vkQueueSubmit(m_GraphicsQueue, 1, &submitInfo, m_InFlightFences[m_CurrentFrame]) != VK_SUCCESS) {
         throw std::runtime_error("failed to submit draw command buffer!");
@@ -1158,7 +1194,7 @@ void Renderer::drawFrame(SceneData &scene)
 
     presentInfo.pImageIndices = &imageIndex;
 
-//    log("Presenting queue...");
+    log("Presenting queue...");
 
     vkQueuePresentKHR(m_PresentationQueue, &presentInfo);
 
@@ -1242,15 +1278,13 @@ Camera &Renderer::getCamera() {
 
 void Renderer::initVKSceneElements(SceneData &scene) {
     for(auto &heightmap : scene.getHeightmaps()){
-        heightmap.Init(8, m_Device, m_PhysicalDevice);
+        heightmap.Init("./heightmaps/N42E013.hgt", m_Device, m_PhysicalDevice);
 
         heightmap.m_DescriptorSets.m_DescriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
 
         // setup descriptor sets
         for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-
-            log("Allocating...");
-            // allocate set
+            // allocate set for heightmap data
             std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, m_DescriptorSetLayout);
             VkDescriptorSetAllocateInfo allocInfo{};
             allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
@@ -1260,39 +1294,62 @@ void Renderer::initVKSceneElements(SceneData &scene) {
 
             VkDescriptorSet descriptorSet;
 
-            if (vkAllocateDescriptorSets(m_Device, &allocInfo, &descriptorSet) != VK_SUCCESS) {
-                throw std::runtime_error("failed to allocate descriptor sets!");
+            log("Initializing heightmap buffer descriptor set");
+
+            VkResult returnCode = VK_SUCCESS;
+            if ((returnCode = vkAllocateDescriptorSets(m_Device, &allocInfo, &descriptorSet)) != VK_SUCCESS) {
+                throw std::runtime_error("failed to allocate descriptor sets! " + std::string(string_VkResult(returnCode)));
             }
-            log("huh...");
 
             heightmap.m_DescriptorSets.m_DescriptorSets[i] = descriptorSet;
 
-            log("Binding...");
+            // bind heightmap buffer to descriptor set
+            VkDescriptorBufferInfo heightmapBufferInfo{};
+            heightmapBufferInfo.buffer = heightmap.m_HeightmapDataBuffer;
+            heightmapBufferInfo.offset = 0;
+            heightmapBufferInfo.range = heightmap.m_DataSize;
 
-            log("Size: " + std::to_string(heightmap.getHeightmapDataSize()));
+            VkWriteDescriptorSet descriptorHeightmapWrite{};
+            descriptorHeightmapWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            descriptorHeightmapWrite.dstSet = heightmap.m_DescriptorSets.m_DescriptorSets[i];
+            descriptorHeightmapWrite.dstBinding = 0;
+            descriptorHeightmapWrite.dstArrayElement = 0;
 
-            // bind buffer to descriptor set
-            VkDescriptorBufferInfo bufferInfo{};
-            bufferInfo.buffer = heightmap.m_MeshletBuffer;
-            bufferInfo.offset = 0;
-            bufferInfo.range = heightmap.getHeightmapDataSize();
+            descriptorHeightmapWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+            descriptorHeightmapWrite.descriptorCount = 1;
 
-            VkWriteDescriptorSet descriptorWrite{};
-            descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-            descriptorWrite.dstSet = heightmap.getDescriptorSet(i);
-            descriptorWrite.dstBinding = 0;
-            descriptorWrite.dstArrayElement = 0;
+            descriptorHeightmapWrite.pBufferInfo = &heightmapBufferInfo;
+            descriptorHeightmapWrite.pImageInfo = nullptr; // Optional
+            descriptorHeightmapWrite.pTexelBufferView = nullptr; // Optional
 
-            descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-            descriptorWrite.descriptorCount = 1;
 
-            descriptorWrite.pBufferInfo = &bufferInfo;
-            descriptorWrite.pImageInfo = nullptr; // Optional
-            descriptorWrite.pTexelBufferView = nullptr; // Optional
+            // bind meshlet descriptions buffer to descriptor set
+            VkDescriptorBufferInfo meshletDescriptionBufferInfo{};
+            meshletDescriptionBufferInfo.buffer = heightmap.m_MeshletDescriptionBuffer;
+            meshletDescriptionBufferInfo.offset = 0;
+            meshletDescriptionBufferInfo.range = heightmap.m_Meshlets.size() * sizeof(HeightmapMeshletDescription);
 
-            log("Update sets...");
+            VkWriteDescriptorSet descriptorMeshletWrite{};
+            descriptorMeshletWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            descriptorMeshletWrite.dstSet = heightmap.m_DescriptorSets.m_DescriptorSets[i];
+            descriptorMeshletWrite.dstBinding = 1;
+            descriptorMeshletWrite.dstArrayElement = 0;
 
-            vkUpdateDescriptorSets(m_Device, 1, &descriptorWrite, 0, nullptr);
+            descriptorMeshletWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+            descriptorMeshletWrite.descriptorCount = 1;
+
+            descriptorMeshletWrite.pBufferInfo = &meshletDescriptionBufferInfo;
+            descriptorMeshletWrite.pImageInfo = nullptr; // Optional
+            descriptorMeshletWrite.pTexelBufferView = nullptr; // Optional
+
+            VkWriteDescriptorSet writes[2] = {
+                    descriptorHeightmapWrite,
+                    descriptorMeshletWrite
+            };
+
+            vkUpdateDescriptorSets(m_Device, 2, writes, 0, nullptr);
+
+
         }
     }
 }

@@ -2,23 +2,50 @@
 
 #extension GL_GOOGLE_include_directive : enable
 
+#extension GL_EXT_shader_explicit_arithmetic_types_int8 : require
+
 #extension GL_EXT_mesh_shader : require
+
+#define MAX_MESHLET_SIZE 32
 
 #include "common.h"
 
 layout (local_size_x=1) in;
 
+layout( push_constant ) uniform constants
+{
+    layout (offset = 64) uint HeightmapLength;
+    uint BaseMeshletOffset;
+    float Longitude;
+    float Latitude;
+} PushConstants;
+
+
+
 layout(std430, binding = 0) buffer HeightmapData {
     float m_Heights[];
 } heightmapData;
 
+struct MeshletDescription {
+    uint start;
+    uint meshletLength;
+};
+
+layout(std140, binding = 1) buffer MeshletDescriptions {
+    MeshletDescription descriptions[];
+} meshletDescriptions;
+
 uint baseID = gl_WorkGroupID.x;
 uint laneID = gl_LocalInvocationID.x;
 
-struct Task
-{
-  uint baseID;
-  uint deltaIDs[128];
+struct Task {
+    uint    baseID;
+    uint deltaIDs[MAX_MESHLET_SIZE];
+    uint    heightmap_length;
+    uint    meshlet_length;
+
+    float Longitude;
+    float Latitude;
 };
 
 taskPayloadSharedEXT Task OUT;
@@ -26,8 +53,17 @@ taskPayloadSharedEXT Task OUT;
 
 void main() {
 
-    for(int i = 0; i<49; i++)
-    OUT.deltaIDs[i] = i;
+    uint meshletID = PushConstants.BaseMeshletOffset + baseID;
 
-    EmitMeshTasksEXT(49, 1, 1);
+    OUT.baseID = meshletID;
+
+    OUT.heightmap_length = PushConstants.HeightmapLength;
+    OUT.Longitude = PushConstants.Longitude;
+    OUT.Latitude = PushConstants.Latitude;
+    OUT.meshlet_length = meshletDescriptions.descriptions[meshletID].meshletLength;
+
+    for(int i = 0; i<MAX_MESHLET_SIZE; i++)
+        OUT.deltaIDs[i] = i;
+
+    EmitMeshTasksEXT(meshletDescriptions.descriptions[meshletID].meshletLength, 1, 1);
 }

@@ -12,9 +12,9 @@
 
 #define UNSET 1
 
-#define CMN_MAX_PREFERRED_MESH_WORK_GROUP_INVOCATIONS UNSET
-#define CMN_MAX_MESH_OUTPUT_VERTICES UNSET
-#define CMN_MAX_MESH_OUTPUT_PRIMITIVES UNSET
+#define CMN_MAX_PREFERRED_MESH_WORK_GROUP_INVOCATIONS 32
+#define CMN_MAX_MESH_OUTPUT_VERTICES 256
+#define CMN_MAX_MESH_OUTPUT_PRIMITIVES 256
 
 #ifdef __cplusplus
 #include <glm/glm.hpp>
@@ -22,7 +22,9 @@
 using namespace glm;
 #endif
 
-
-
+//struct MeshletDescription {
+//    u8vec2 Offset; // starting point of the meshlet in the chunk
+//    u8vec2 Dimensions; // dimensions of the meshlet
+//};
 
 #endif //LOD_TERRAIN_RENDERING_THESIS_PROJECT_COMMON_H

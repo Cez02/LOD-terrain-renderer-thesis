@@ -14,6 +14,9 @@ layout(location=0,index=0) out vec4 out_Color;
 
 void main() {
 
+    float fact = float(IN.meshletID % 10);
+
+    //out_Color = vec4( fact, 1.0f / fact, 0.1f , 1.0f);
     out_Color = vec4(IN.wNormal + vec3(1, 1, 1), 2.0f) * 0.5f;
 
 /*

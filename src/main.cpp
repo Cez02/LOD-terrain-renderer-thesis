@@ -1,6 +1,7 @@
 #include <bits/stdc++.h>
 #include <src/tr_window.hpp>
 #include <src/tr_renderer.hpp>
+#include <src/tr_shadercompiler.hpp>
 
 #include <src/tr_logger.hpp>
 
@@ -50,6 +51,8 @@ int main(){
 
         /* Handle logic */
 
+        log("Receiving input");
+
         Camera cam = mainRenderer.getCamera();
 
         if (glfwGetKey(mainWindow.getGLFWWindow(), GLFW_KEY_W) == GLFW_PRESS)
@@ -66,6 +69,9 @@ int main(){
             playerPosition += cam.getUpVector()  * deltaTime;
         if (glfwGetKey(mainWindow.getGLFWWindow(), GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS)
             playerPosition -= cam.getUpVector()  * deltaTime;
+
+
+        log("Camera rotations...");
 
         float rotateDelta = 0;
         if (glfwGetKey(mainWindow.getGLFWWindow(), GLFW_KEY_E) == GLFW_PRESS)
@@ -104,8 +110,11 @@ int main(){
 
         /* Draw */
 
+        log("Drawing frame");
         mainRenderer.drawFrame(scene);
 
+
+        log("Calculating delta times");
         deltaTime = abs(glfwGetTime() - time);
         time = glfwGetTime();
 

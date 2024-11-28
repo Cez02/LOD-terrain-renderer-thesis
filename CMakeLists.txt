@@ -28,4 +28,10 @@ target_include_directories(terrain_renderer
     PUBLIC ${VULKAN_INCLUDE_DIRS}
 )
 
+target_compile_definitions(terrain_renderer
+    PUBLIC
+        SHADER_SOURCES_DIRECTORY="${CMAKE_CURRENT_SOURCE_DIR}/shaders"
+        SHADER_BINARIES_DIRECTORY="${CMAKE_CURRENT_BINARY_DIR}/shaders"
+)
+
 include(src/CMakeLists.txt)
