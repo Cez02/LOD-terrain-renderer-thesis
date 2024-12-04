@@ -264,6 +264,18 @@ bool Renderer::isDeviceSuitable(VkPhysicalDevice device) {
     APP_CONFIG.m_MeshShaderConfig.m_MaxMeshOutputPrimitives = meshShaderProperties.maxMeshOutputPrimitives;
     APP_CONFIG.m_MeshShaderConfig.m_MaxMeshOutputVertices = meshShaderProperties.maxMeshOutputVertices;
 
+    APP_CONFIG.m_MeshShaderConfig.m_MaxTaskWorkgroupCount = meshShaderProperties.maxTaskWorkGroupCount[0];
+
+    APP_CONFIG.m_MeshletInfo.m_MaxMeshletDimensionLength = glm::floor(glm::sqrt(meshShaderProperties.maxMeshOutputVertices));
+
+    APP_CONFIG.m_MeshShaderConfig.m_MaxTaskWorkGroupInvocations = meshShaderProperties.maxTaskWorkGroupInvocations;
+
+    memcpy(APP_CONFIG.m_MeshShaderConfig.maxMeshWorkGroupSize, meshShaderProperties.maxMeshWorkGroupSize, sizeof(uint32_t) * 3);
+    memcpy(APP_CONFIG.m_MeshShaderConfig.maxTaskWorkGroupSize, meshShaderProperties.maxTaskWorkGroupSize, sizeof(uint32_t) * 3);
+
+    APP_CONFIG.m_MeshShaderConfig.m_MaxTaskWorkgroupSizeTotal = meshShaderProperties.maxTaskWorkGroupTotalCount;
+
+
     // the rest
 
     QueueFamilyIndices indices = findQueueFamilies(device);
@@ -1138,20 +1150,20 @@ void Renderer::initVulkan(Window *appWindow)
 
 void Renderer::drawFrame(SceneData &scene)
 {
-    log("=== Drawing frame ===");
+//    log("=== Drawing frame ===");
 
-    log("\tWaiting for fences...");
+//    log("\tWaiting for fences...");
 
     vkWaitForFences(m_Device, 1, &m_InFlightFences[m_CurrentFrame], VK_TRUE, UINT64_MAX);
 
     vkResetFences(m_Device, 1, &m_InFlightFences[m_CurrentFrame]);
 
-    log("\tGetting image...");
+//    log("\tGetting image...");
 
     uint32_t imageIndex;
     vkAcquireNextImageKHR(m_Device, m_SwapChain, UINT64_MAX, m_ImageAvailableSemaphores[m_CurrentFrame], VK_NULL_HANDLE, &imageIndex);
 
-    log("\tRecording command buffer...");
+//    log("\tRecording command buffer...");
 
     vkResetCommandBuffer(m_CommandBuffers[m_CurrentFrame], 0);
     recordCommandBuffer(m_CommandBuffers[m_CurrentFrame], imageIndex, scene);
@@ -1174,7 +1186,7 @@ void Renderer::drawFrame(SceneData &scene)
     submitInfo.signalSemaphoreCount = 1;
     submitInfo.pSignalSemaphores = signalSemaphores;
 
-    log("Submitting queue...");
+//    log("Submitting queue...");
 
     if (vkQueueSubmit(m_GraphicsQueue, 1, &submitInfo, m_InFlightFences[m_CurrentFrame]) != VK_SUCCESS) {
         throw std::runtime_error("failed to submit draw command buffer!");
@@ -1194,7 +1206,7 @@ void Renderer::drawFrame(SceneData &scene)
 
     presentInfo.pImageIndices = &imageIndex;
 
-    log("Presenting queue...");
+//    log("Presenting queue...");
 
     vkQueuePresentKHR(m_PresentationQueue, &presentInfo);
 
@@ -1327,7 +1339,7 @@ void Renderer::initVKSceneElements(SceneData &scene) {
             VkDescriptorBufferInfo meshletDescriptionBufferInfo{};
             meshletDescriptionBufferInfo.buffer = heightmap.m_MeshletDescriptionBuffer;
             meshletDescriptionBufferInfo.offset = 0;
-            meshletDescriptionBufferInfo.range = heightmap.m_Meshlets.size() * sizeof(HeightmapMeshletDescription);
+            meshletDescriptionBufferInfo.range = heightmap.m_Meshlets.size() * sizeof(MeshletDescription);
 
             VkWriteDescriptorSet descriptorMeshletWrite{};
             descriptorMeshletWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;

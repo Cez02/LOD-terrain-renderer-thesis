@@ -12,13 +12,13 @@
 
 #define UNSET 1
 
-#define CMN_MAX_PREFERRED_MESH_WORK_GROUP_INVOCATIONS 32
-#define CMN_MAX_PREFERRED_TASK_WORK_GROUP_INVOCATIONS 32
-#define CMN_MAX_MESH_OUTPUT_VERTICES 256
-#define CMN_MAX_MESH_OUTPUT_PRIMITIVES 256
+#define CMN_MAX_PREFERRED_MESH_WORK_GROUP_INVOCATIONS $m_MaxPreferredMeshWorkGroupInvocations
+#define CMN_MAX_PREFERRED_TASK_WORK_GROUP_INVOCATIONS $m_MaxPreferredTaskWorkGroupInvocations
+#define CMN_MAX_MESH_OUTPUT_VERTICES $m_MaxMeshOutputVertices
+#define CMN_MAX_MESH_OUTPUT_PRIMITIVES $m_MaxMeshOutputPrimitives
 
-#define CMN_MAX_TASK_WORKGROUP_SIZE 128
-#define CMN_MAX_MESH_WORKGROUP_SIZE 128
+#define CMN_MAX_TASK_WORKGROUP_SIZE $m_MaxTaskWorkgroupSize
+#define CMN_MAX_MESH_WORKGROUP_SIZE $m_MaxMeshWorkgroupSize
 
 
 #ifdef __cplusplus
@@ -27,7 +27,7 @@
 using namespace glm;
 #endif
 
-#define CMN_MAX_MESHLET_DIMENSION_LENGTH 16
+#define CMN_MAX_MESHLET_DIMENSION_LENGTH $maxMeshletDimensionLength
 
 
 struct

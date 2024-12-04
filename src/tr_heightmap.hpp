@@ -4,10 +4,7 @@
 #include <vulkan/vulkan.hpp>
 
 #include "tr_descriptorbundle.hpp"
-
-struct HeightmapMeshletDescription {
-    glm::uint m_Start, m_Length;
-};
+#include "shaders/common.h"
 
 struct HeightmapPushConstantData {
     uint HeightmapLength;
@@ -23,9 +20,10 @@ private:
 
 public:
     float *m_Data;
+    std::vector<float> m_DataOrganizedForMeshlets;
     size_t m_HeightmapLength;
     size_t m_DataSize;
-    std::vector<HeightmapMeshletDescription> m_Meshlets;
+    std::vector<MeshletDescription> m_Meshlets;
 
     float m_Longitude, m_Latitude;
 

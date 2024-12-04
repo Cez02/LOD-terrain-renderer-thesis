@@ -1,12 +1,41 @@
 cmake_minimum_required(VERSION 3.12)
 project("LOD terrain rendering thesis project")
 
+LIST(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 add_executable(terrain_renderer)
 
 find_package(glfw3 REQUIRED)
-find_package(Vulkan REQUIRED)
+find_package(Vulkan REQUIRED COMPONENTS shaderc_combined SPIRV-Tools glslang glslangValidator)
 find_package(glm REQUIRED)
+
+find_library(SHADERC_LIB                NAMES "shaderc"                     HINTS ${LIB_SPIRV_RELEASE_PATH})
+find_library(SHADERC_LIB_D              NAMES "shaderc"                     HINTS ${LIB_SPIRV_DEBUG_PATH})
+
+find_library(GLSLANG_LIB                NAMES "glslang"                     HINTS ${LIB_SPIRV_RELEASE_PATH})
+find_library(GLSLANG_LIB_D              NAMES "glslang" "glslangd"          HINTS ${LIB_SPIRV_DEBUG_PATH})
+
+find_library(SPIRV_LIB                  NAMES "SPIRV"                       HINTS ${LIB_SPIRV_RELEASE_PATH})
+find_library(SPIRV_LIB_D                NAMES "SPIRV" "SPIRVd"              HINTS ${LIB_SPIRV_DEBUG_PATH})
+
+find_library(GLSLANG_OSDEPENDENT_LIB    NAMES "OSDependent"                 HINTS ${LIB_SPIRV_RELEASE_PATH})
+find_library(GLSLANG_OSDEPENDENT_LIB_D  NAMES "OSDependent" "OSDependentd"  HINTS ${LIB_SPIRV_DEBUG_PATH})
+
+find_library(SPIRV_TOOLS_LIB            NAMES "SPIRV-Tools"                 HINTS ${LIB_SPIRV_RELEASE_PATH})
+find_library(SPIRV_TOOLS_LIB_D          NAMES "SPIRV-Tools"                 HINTS ${LIB_SPIRV_DEBUG_PATH})
+
+find_library(SPIRV_TOOLS_OPT_LIB        NAMES "SPIRV-Tools-opt"             HINTS ${LIB_SPIRV_RELEASE_PATH})
+find_library(SPIRV_TOOLS_OPT_LIB_D      NAMES "SPIRV-Tools-opt"             HINTS ${LIB_SPIRV_DEBUG_PATH})
+
+set(SHADERC_LIBS
+        ${SHADERC_LIB}
+        ${SPIRV_LIB}
+        ${GLSLANG_LIB}
+        ${GLSLANG_OSDEPENDENT_LIB}
+        ${SPIRV_TOOLS_OPT_LIB}
+        ${SPIRV_TOOLS_LIB}
+)
+
 
 include(shaders/CMakeLists.txt)
 
@@ -18,9 +47,8 @@ target_compile_definitions(terrain_renderer
 target_link_libraries(terrain_renderer
     PUBLIC
         glfw
-        vulkan
-        glm::glm
-        shaderc_combined
+        ${SHADERC_LIBS}
+        ${Vulkan_LIBRARIES}
 )
 
 target_include_directories(terrain_renderer
@@ -28,10 +56,23 @@ target_include_directories(terrain_renderer
     PUBLIC ${VULKAN_INCLUDE_DIRS}
 )
 
+target_include_directories(terrain_renderer
+        PRIVATE
+            ./shaders
+)
+
+
 target_compile_definitions(terrain_renderer
     PUBLIC
         SHADER_SOURCES_DIRECTORY="${CMAKE_CURRENT_SOURCE_DIR}/shaders"
         SHADER_BINARIES_DIRECTORY="${CMAKE_CURRENT_BINARY_DIR}/shaders"
 )
+
+if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+    target_compile_definitions(terrain_renderer
+            PUBLIC
+            DEBUG
+    )
+endif()
 
 include(src/CMakeLists.txt)

@@ -1,16 +1,23 @@
 #version 460
 
+// Setup
+
 #extension GL_GOOGLE_include_directive : enable
 
 #extension GL_EXT_shader_explicit_arithmetic_types_int8 : require
 
 #extension GL_EXT_mesh_shader : require
 
-#define MAX_MESHLET_SIZE 32
+#extension GL_EXT_control_flow_attributes: require
+#define UNROLL_LOOP [[unroll]]
+
 
 #include "common.h"
 
-layout (local_size_x=1) in;
+layout (local_size_x=CMN_MAX_PREFERRED_TASK_WORK_GROUP_INVOCATIONS) in;
+
+
+// Push constants
 
 layout( push_constant ) uniform constants
 {
@@ -21,28 +28,33 @@ layout( push_constant ) uniform constants
 } PushConstants;
 
 
+// SSBOs
 
 layout(std430, binding = 0) buffer HeightmapData {
     float m_Heights[];
 } heightmapData;
 
-struct MeshletDescription {
-    uint start;
-    uint meshletLength;
-};
-
 layout(std140, binding = 1) buffer MeshletDescriptions {
     MeshletDescription descriptions[];
 } meshletDescriptions;
 
+
+// Indexing stuff
+
 uint baseID = gl_WorkGroupID.x;
 uint laneID = gl_LocalInvocationID.x;
 
+
+// Task payload
+
+#define MAX_MESHLET_SIZE CMN_MAX_MESH_OUTPUT_VERTICES
+
 struct Task {
-    uint    baseID;
-    uint deltaIDs[MAX_MESHLET_SIZE];
+    uint    meshletID;
+
+    uvec2   baseOffset;
+    u8vec2  deltas[MAX_MESHLET_SIZE];
     uint    heightmap_length;
-    uint    meshlet_length;
 
     float Longitude;
     float Latitude;
@@ -50,20 +62,22 @@ struct Task {
 
 taskPayloadSharedEXT Task OUT;
 
+// Utils
 
 void main() {
+    OUT.meshletID = PushConstants.BaseMeshletOffset + baseID;
 
-    uint meshletID = PushConstants.BaseMeshletOffset + baseID;
-
-    OUT.baseID = meshletID;
+    OUT.baseOffset = meshletDescriptions.descriptions[OUT.meshletID].Offset;
 
     OUT.heightmap_length = PushConstants.HeightmapLength;
     OUT.Longitude = PushConstants.Longitude;
     OUT.Latitude = PushConstants.Latitude;
-    OUT.meshlet_length = meshletDescriptions.descriptions[meshletID].meshletLength;
 
-    for(int i = 0; i<MAX_MESHLET_SIZE; i++)
-        OUT.deltaIDs[i] = i;
-
-    EmitMeshTasksEXT(meshletDescriptions.descriptions[meshletID].meshletLength, 1, 1);
+    for(int i = 0; i<CMN_MAX_MESHLET_DIMENSION_LENGTH; i++) {
+        for (int j = 0; j < CMN_MAX_MESHLET_DIMENSION_LENGTH; j++)
+        {
+            OUT.deltas[i * CMN_MAX_MESHLET_DIMENSION_LENGTH + j] = u8vec2(j, i);
+        }
+    }
+    EmitMeshTasksEXT(CMN_MAX_MESHLET_DIMENSION_LENGTH * CMN_MAX_MESHLET_DIMENSION_LENGTH, 1, 1);
 }

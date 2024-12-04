@@ -36,7 +36,8 @@
         "name": "build-base",
         "hidden": true,
         "configurePreset": "Debug",
-        "targets": "all"
+        "targets": "all",
+        "jobs": 8
     },
     {
       "name": "Debug",

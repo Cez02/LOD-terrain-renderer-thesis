@@ -13,7 +13,22 @@ public:
         VkBool32 m_PrefersLocalInvocationPrimitiveOutput;
         VkBool32 m_PrefersCompactVertexOutput;
         VkBool32 m_PrefersCompactPrimitiveOutput;
+        VkBool32 m_MaxTaskWorkGroupInvocations;
+
+        uint32_t  m_MaxTaskWorkgroupCount;
+
+        uint32_t           maxTaskWorkGroupSize[3];
+        uint32_t           maxMeshWorkGroupSize[3];
+
+        uint32_t m_MaxTaskWorkgroupSizeTotal;
+
     } m_MeshShaderConfig;
+
+    struct MeshletInfo {
+        uint32_t m_MaxMeshletDimensionLength;
+    } m_MeshletInfo;
+
+    void print();
 };
 
 extern AppConfig APP_CONFIG;

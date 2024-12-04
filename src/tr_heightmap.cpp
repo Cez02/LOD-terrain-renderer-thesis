@@ -11,6 +11,7 @@
 #include <filesystem>
 
 #include "tr_logger.hpp"
+#include "tr_appconfig.hpp"
 
 static
 void LoadTerrain(std::string path, float **dst, size_t *size, float *latitude, float *longitude) {
@@ -60,6 +61,7 @@ void Heightmap::Init(std::string dataPath, VkDevice device, VkPhysicalDevice phy
 
     LoadTerrain(dataPath, &m_Data, &m_DataSize, &m_Latitude, &m_Longitude);
 
+
     std::cout << "Loaded terrain of buffer size: " << m_DataSize << std::endl;
 
     // build meshlets
@@ -68,41 +70,54 @@ void Heightmap::Init(std::string dataPath, VkDevice device, VkPhysicalDevice phy
     lengthOfHeightmap = sqrt(lengthOfHeightmap);
     m_HeightmapLength = lengthOfHeightmap;
 
-    int maxMeshletSize = 32;
 
-    // this is basic we only generate meshlets describing singular points that generate from themselves 2 triangles.
 
-//    int meshletMaxRange = (lengthOfHeightmap - 1)*(lengthOfHeightmap - 1);
 
+    // meshlet building
     int sizePerLine = 0;
+    uint organizedDataOffset = 0;
 
-    for(int y = 0; y<lengthOfHeightmap - 1; y++) {
+    int maxMeshletSize = APP_CONFIG.m_MeshletInfo.m_MaxMeshletDimensionLength;
+    for(int y = 0; y<lengthOfHeightmap - 1; y += maxMeshletSize) {
         int dataPointer = 0;
         sizePerLine = 0;
 
         for (int x = 0; x < lengthOfHeightmap - 1;) {
 
             // building one meshlet
-            HeightmapMeshletDescription description;
-            memset(&description, 0, sizeof(HeightmapMeshletDescription));
+            MeshletDescription description;
+            memset(&description, 0, sizeof(description));
 
-
-            description.m_Start = y * lengthOfHeightmap + x;
+            description.Offset = uvec2(x, y);
 
             if (x + maxMeshletSize > lengthOfHeightmap - 1) {
-                description.m_Length = lengthOfHeightmap - 1 - x;
+                description.Dimensions.x = lengthOfHeightmap - 1 - x;
             } else {
-                description.m_Length = maxMeshletSize;
+                description.Dimensions.x = maxMeshletSize;
             }
-//
-            if(y == 0)
-                std::cout << "New meshlet " << sizePerLine << ", start: " << description.m_Start << ", length: " << description.m_Length << std::endl;
 
-            x += description.m_Length;
+            if (y + maxMeshletSize > lengthOfHeightmap - 1) {
+                description.Dimensions.y = lengthOfHeightmap - 1 - y;
+            } else {
+                description.Dimensions.y = maxMeshletSize;
+            }
+
+            // now we build a linear chunk in the organized array
+
+            description.HeightmapDataOffset = organizedDataOffset;
+
+            for(int dy = 0; dy < description.Dimensions.y + 1; dy++){
+                for(int dx = 0; dx < description.Dimensions.x + 1; dx++){
+                    m_DataOrganizedForMeshlets.push_back(m_Data[x + dx + (dy + y) * m_HeightmapLength]);
+                }
+            }
+
+            x += description.Dimensions.x;
+
+            organizedDataOffset += (description.Dimensions.x + 1) * (description.Dimensions.y + 1);
 
             sizePerLine ++;
             m_Meshlets.push_back(description);
-            m_Meshlets.emplace_back(); // padding
         }
 
 //        log("Size per line: " + std::to_string(sizePerLine));
@@ -113,7 +128,7 @@ void Heightmap::Init(std::string dataPath, VkDevice device, VkPhysicalDevice phy
     // Heightmap data buffer creation and allocation
 
     m_Device = device;
-    VkDeviceSize size = m_DataSize;
+    VkDeviceSize size = m_DataOrganizedForMeshlets.size() * sizeof(float);
     VkMemoryPropertyFlags properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
 
     VkBufferCreateInfo bufferInfo { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
@@ -140,7 +155,7 @@ void Heightmap::Init(std::string dataPath, VkDevice device, VkPhysicalDevice phy
 
     void *data;
     vkMapMemory(device, m_HeightmapDataBufferMemory, 0, size, 0, &data);
-    memcpy(data, m_Data, m_DataSize);
+    memcpy(data, m_DataOrganizedForMeshlets.data(), m_DataOrganizedForMeshlets.size() * sizeof(float));
     vkUnmapMemory(device, m_HeightmapDataBufferMemory);
 
 
@@ -148,7 +163,7 @@ void Heightmap::Init(std::string dataPath, VkDevice device, VkPhysicalDevice phy
     // Meshlet description buffer creation and allocation
 
     m_Device = device;
-    size = m_Meshlets.size() * sizeof(HeightmapMeshletDescription);
+    size = m_Meshlets.size() * sizeof(MeshletDescription);
 
     VkBufferCreateInfo meshletDescriptionBufferInfo { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
     meshletDescriptionBufferInfo.size = size;
@@ -174,7 +189,7 @@ void Heightmap::Init(std::string dataPath, VkDevice device, VkPhysicalDevice phy
 
     data = nullptr;
     vkMapMemory(device, m_MeshletDescriptionBufferMemory, 0, size, 0, &data);
-    memcpy(data, m_Meshlets.data(), m_Meshlets.size() * sizeof(HeightmapMeshletDescription));
+    memcpy(data, m_Meshlets.data(), m_Meshlets.size() * sizeof(MeshletDescription));
     vkUnmapMemory(device, m_MeshletDescriptionBufferMemory);
 }
 
@@ -193,10 +208,7 @@ uint32_t Heightmap::findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags pr
 }
 
 void Heightmap::Bind(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLayout, int frame) {
-
-    int maxTasksEmitted = 128;
-
-//    log("\tBind descriptor sets");
+    //    log("\tBind descriptor sets");
 
     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &(m_DescriptorSets.m_DescriptorSets[frame]), 0, nullptr);
 
@@ -208,16 +220,25 @@ void Heightmap::Bind(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLay
     data.Longitude = m_Longitude;
     data.BaseMeshletOffset = 0;
 
+    uint maxTasksEmitted = 32;
+
+    log("Drawing " + std::to_string(maxTasksEmitted) + " meshlets.");
+
     for(int i = 0; i<m_Meshlets.size();) {
         data.BaseMeshletOffset = i;
 
         vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_TASK_BIT_EXT, sizeof(glm::mat4), sizeof(HeightmapPushConstantData), &data);
 
-//        log("\tDraw call");
 
-        vkCmdDrawMeshTasksEXT(commandBuffer, maxTasksEmitted, 1, 1);
 
-        i += maxTasksEmitted;
+        uint emittedTasks = maxTasksEmitted;
+        if(i + maxTasksEmitted >= m_Meshlets.size()){
+            emittedTasks = m_Meshlets.size() - i;
+        }
+
+        vkCmdDrawMeshTasksEXT(commandBuffer, emittedTasks, 1, 1);
+
+        i += emittedTasks;
     }
 }
 

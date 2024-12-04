@@ -17,6 +17,8 @@
 
 #include <vulkan/vulkan.hpp>
 
+#include <glm/glm.hpp>
+
 using namespace std;
 
 namespace shaders{
@@ -31,7 +33,7 @@ namespace shaders{
 
     void UpdateCommonHeaderValues(){
         string commonHeader = SHADER_SOURCES_DIRECTORY;
-        commonHeader += "/common.h";
+        commonHeader += "/common_template.h";
 
         std::ifstream inputfile( commonHeader);
 
@@ -51,14 +53,23 @@ namespace shaders{
         // Replace define values with appropriate from appconfig
 
         replace(content, "$m_MaxPreferredMeshWorkGroupInvocations", to_string(APP_CONFIG.m_MeshShaderConfig.m_MaxPreferredMeshWorkGroupInvocations));
+        replace(content, "$m_MaxPreferredTaskWorkGroupInvocations", to_string(APP_CONFIG.m_MeshShaderConfig.m_MaxPreferredTaskWorkGroupInvocations));
         replace(content, "$m_MaxMeshOutputVertices", to_string(APP_CONFIG.m_MeshShaderConfig.m_MaxMeshOutputVertices));
         replace(content, "$m_MaxMeshOutputPrimitives", to_string(APP_CONFIG.m_MeshShaderConfig.m_MaxMeshOutputPrimitives));
+        replace(content, "$maxMeshletDimensionLength", to_string(APP_CONFIG.m_MeshletInfo.m_MaxMeshletDimensionLength));
 
+        replace(content, "$m_MaxTaskWorkgroupSize", to_string(APP_CONFIG.m_MeshShaderConfig.maxTaskWorkGroupSize[0]));
+        replace(content, "$m_MaxMeshWorkgroupSize", to_string(APP_CONFIG.m_MeshShaderConfig.maxMeshWorkGroupSize[0]));
 
         // write content back to header
-        std::ofstream fs(commonHeader, std::ios::out);
+        commonHeader = SHADER_SOURCES_DIRECTORY;
+        commonHeader += "/common.h";
+
+        std::ofstream fs(commonHeader);
         fs << content;
+        fs.flush();
         fs.close();
+
     }
 
     class NEShaderIncluder : public shaderc::CompileOptions::IncluderInterface
@@ -70,11 +81,11 @@ namespace shaders{
                 size_t include_depth)
         {
             const string name = string(requested_source);
-            const string contents;
 
             std::string inputFilePath = SHADER_SOURCES_DIRECTORY;
             inputFilePath += "/";
             inputFilePath += string(requested_source);
+
             std::ifstream inputfile( inputFilePath);
 
             std::string content(
@@ -85,7 +96,7 @@ namespace shaders{
 
             auto container = new std::array<std::string, 2>;
             (*container)[0] = name;
-            (*container)[1] = contents;
+            (*container)[1] = content;
 
             auto data = new shaderc_include_result;
 
@@ -140,17 +151,23 @@ namespace shaders{
         inputfile.close();
 
         shaderc::CompileOptions compileOptions;
+
+        compileOptions.SetTargetEnvironment(shaderc_target_env::shaderc_target_env_vulkan, shaderc_env_version_vulkan_1_3);
         compileOptions.SetTargetSpirv(shaderc_spirv_version_1_5);
         compileOptions.SetIncluder(std::make_unique<NEShaderIncluder>());
-        compileOptions.SetTargetEnvironment(shaderc_target_env::shaderc_target_env_vulkan, shaderc_env_version_vulkan_1_3);
 
-
+#ifdef DEBUG
+        compileOptions.SetOptimizationLevel(shaderc_optimization_level::shaderc_optimization_level_zero);
+#else
+        compileOptions.SetOptimizationLevel(shaderc_optimization_level::shaderc_optimization_level_performance);
+#endif
         // Preprocess
         shaderc::Compiler compiler;
         shaderc::PreprocessedSourceCompilationResult preprocessedSourceCompilationResult = compiler.PreprocessGlsl(content, shaderKind, filePath.filename().c_str(), compileOptions);
 
         if(preprocessedSourceCompilationResult.GetCompilationStatus() != shaderc_compilation_status_success){
             logError(preprocessedSourceCompilationResult.GetErrorMessage());
+            exit(1);
         }
 
         const char *src = preprocessedSourceCompilationResult.cbegin();
@@ -167,6 +184,7 @@ namespace shaders{
 
         if(assemblyCompileResult.GetCompilationStatus() != shaderc_compilation_status_success){
             logError(assemblyCompileResult.GetErrorMessage());
+            exit(1);
         }
 
         src = assemblyCompileResult.cbegin();
@@ -174,9 +192,14 @@ namespace shaders{
         content.resize(newSize);
         memcpy(content.data(), src, newSize);
 
-//        log("SPIR-V assembly:");
-//        log(content);
+        log("SPIR-V assembly:");
+        log(content);
 
+        string sprivAssFilePath = outputDirectory.string() + "/";
+        sprivAssFilePath += filePath.filename().string() + ".ass";
+        std::ofstream ass(sprivAssFilePath);
+        ass << content;
+        ass.close();
 
 
         // Compilation to binary
@@ -184,6 +207,7 @@ namespace shaders{
 
         if(binaryCompilationResult.GetCompilationStatus() != shaderc_compilation_status_success){
             logError(binaryCompilationResult.GetErrorMessage());
+            exit(1);
         }
 
         const uint32_t *binarySrc = binaryCompilationResult.cbegin();
@@ -215,6 +239,8 @@ namespace shaders{
 
         std::string shaderSourcesDirectory = SHADER_SOURCES_DIRECTORY;
         std::string shaderBinariesDirectory = SHADER_BINARIES_DIRECTORY;
+
+        filesystem::create_directory(shaderBinariesDirectory);
 
         for(auto f : std::filesystem::directory_iterator(shaderSourcesDirectory)){
 

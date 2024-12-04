@@ -1,5 +1,7 @@
 #version 460
 
+// Setup
+
 #extension GL_GOOGLE_include_directive : enable
 
 #extension GL_EXT_shader_explicit_arithmetic_types_int8 : require
@@ -8,23 +10,18 @@
 
 #include "common.h"
 
-#define MAX_MESHLET_SIZE 32
-
-layout (local_size_x=32) in;
+layout (local_size_x=CMN_MAX_PREFERRED_MESH_WORK_GROUP_INVOCATIONS) in;
 layout (triangles) out;
 
-layout(max_vertices=64, max_primitives=64) out;
+layout(max_vertices=CMN_MAX_MESH_OUTPUT_VERTICES, max_primitives=CMN_MAX_MESH_OUTPUT_PRIMITIVES) out;
 layout(triangles) out;
 
+
+// SSBOs
 
 layout(std430, binding = 0) buffer HeightmapData {
     float m_Heights[];
 } heightmapData;
-
-struct MeshletDescription {
-    uint start;
-    uint length;
-};
 
 layout(std140, binding = 1) buffer MeshletDescriptions {
     MeshletDescription descriptions[];
@@ -32,7 +29,7 @@ layout(std140, binding = 1) buffer MeshletDescriptions {
 
 
 
-
+// Push constants
 
 layout( push_constant ) uniform constants
 {
@@ -40,16 +37,16 @@ layout( push_constant ) uniform constants
 } PushConstants;
 
 
+// Task shader input
 
-
-// task shader input
+#define MAX_MESHLET_SIZE CMN_MAX_MESH_OUTPUT_VERTICES
 
 struct Task {
-    uint    baseID;
-    uint deltaIDs[MAX_MESHLET_SIZE];
-    uint    heightmap_length;
-    uint    meshlet_length;
+    uint    meshletID;
 
+    uvec2   baseOffset;
+    u8vec2  deltas[MAX_MESHLET_SIZE];
+    uint    heightmap_length;
 
     float Longitude;
     float Latitude;
@@ -57,8 +54,10 @@ struct Task {
 taskPayloadSharedEXT Task IN;
 
 
+// Indexing stuff
+
 // gl_WorkGroupID.x runs from [0 .. parentTask.groupCountX - 1]
-uint meshletID = IN.baseID + IN.deltaIDs[gl_WorkGroupID.x];
+uint meshletID = IN.meshletID;
 
 uint laneID = gl_LocalInvocationID.x;
 
@@ -70,7 +69,6 @@ layout(location=0) out Interpolants {
     vec3  wNormal;
     flat uint meshletID;
     flat uint workgroupID;
-    flat uint baseID;
     flat uvec2 coordinates;
     uint pointID;
 } OUT[];
@@ -99,10 +97,10 @@ vec3 polarToCartesian(float lat, float lon){
 }
 
 uvec2 getPos(uvec2 pointOffset){
-    uint pointID = meshletDescriptions.descriptions[IN.baseID].start + IN.deltaIDs[gl_WorkGroupID.x];
+    uvec2 pointCoordinates = meshletDescriptions.descriptions[IN.meshletID].Offset + IN.deltas[gl_WorkGroupID.x];
 
-    uint fragmentXIndex = pointID % (IN.heightmap_length);
-    uint fragmentYIndex = pointID / (IN.heightmap_length) ;
+    uint fragmentXIndex = pointCoordinates.x;
+    uint fragmentYIndex = pointCoordinates.y;
 
     return uvec2( fragmentXIndex + pointOffset.x, fragmentYIndex + pointOffset.y);
 }
@@ -118,10 +116,6 @@ vec2 localPolarOffset(uvec2 pointOffset){
 }
 
 void main() {
-
-    uint vertCount = 6;
-    uint primCount = 2;
-    SetMeshOutputsEXT(vertCount, primCount);
 
 /*
     uint pointID = meshletDescriptions.descriptions[IN.baseID].start + IN.deltaIDs[gl_WorkGroupID.x];
@@ -144,25 +138,49 @@ void main() {
 
 // Old system
 
-    uint pointID = meshletDescriptions.descriptions[IN.baseID].start + IN.deltaIDs[gl_WorkGroupID.x];
+    MeshletDescription meshlet;
+    meshlet.Offset = meshletDescriptions.descriptions[IN.meshletID].Offset;
+    meshlet.Dimensions = meshletDescriptions.descriptions[IN.meshletID].Dimensions;
+    meshlet.HeightmapDataOffset = meshletDescriptions.descriptions[IN.meshletID].HeightmapDataOffset;
 
-    uint fragmentXIndex = pointID % (IN.heightmap_length);
-    uint fragmentYIndex = pointID / (IN.heightmap_length);
+    uvec2 pointCoordinates = meshlet.Offset + IN.deltas[gl_WorkGroupID.x];
 
+    if (pointCoordinates.x + meshlet.Dimensions.x >= IN.heightmap_length ||
+        pointCoordinates.y + meshlet.Dimensions.y >= IN.heightmap_length ){
+        SetMeshOutputsEXT(0, 0);
+
+        return;
+    }
+
+    uint vertCount = 6;
+    uint primCount = 2;
+    SetMeshOutputsEXT(vertCount, primCount);
+
+    uint fragmentXIndex = pointCoordinates.x;
+    uint fragmentYIndex = pointCoordinates.y;
 
     float hglen = float(IN.heightmap_length);
 
-    vec3 vertA = vec3( float(fragmentXIndex) / hglen, heightmapData.m_Heights[pointID] / 50000.0f, float(fragmentYIndex) / hglen);
-    vec3 vertC = vec3( float(fragmentXIndex + 1) / hglen, heightmapData.m_Heights[pointID + 1] / 50000.0f, float(fragmentYIndex) / hglen);
-    vec3 vertB = vec3( float(fragmentXIndex) / hglen, heightmapData.m_Heights[pointID + IN.heightmap_length] / 50000.0f, float(fragmentYIndex + 1) / hglen);
-    vec3 vertD = vec3( float(fragmentXIndex + 1) / hglen, heightmapData.m_Heights[pointID + IN.heightmap_length + 1] / 50000.0f, float(fragmentYIndex + 1) / hglen);
+    uint pointID = pointCoordinates.x + pointCoordinates.y * IN.heightmap_length;
+
+
+    uint dataOffset = meshlet.HeightmapDataOffset;
+    u8vec2 pointDelta = IN.deltas[gl_WorkGroupID.x];
+
+    uint offsetLinearA = uint(pointDelta.x) + uint(pointDelta.y) * (meshlet.Dimensions.x + 1);
+    uint offsetLinearB = uint(pointDelta.x + 1) + uint(pointDelta.y) * (meshlet.Dimensions.x + 1);
+    uint offsetLinearC = uint(pointDelta.x) + uint(pointDelta.y + 1) * (meshlet.Dimensions.x + 1);
+    uint offsetLinearD = uint(pointDelta.x + 1) + uint(pointDelta.y + 1) * (meshlet.Dimensions.x + 1);
+
+    vec3 vertA = vec3( float(fragmentXIndex) / hglen, heightmapData.m_Heights[offsetLinearA + dataOffset] / 50000.0f, float(fragmentYIndex) / hglen);
+    vec3 vertC = vec3( float(fragmentXIndex + 1) / hglen, heightmapData.m_Heights[offsetLinearB + dataOffset] / 50000.0f, float(fragmentYIndex) / hglen);
+    vec3 vertB = vec3( float(fragmentXIndex) / hglen, heightmapData.m_Heights[offsetLinearC + dataOffset] / 50000.0f, float(fragmentYIndex + 1) / hglen);
+    vec3 vertD = vec3( float(fragmentXIndex + 1) / hglen, heightmapData.m_Heights[offsetLinearD + dataOffset] / 50000.0f, float(fragmentYIndex + 1) / hglen);
 
     vertA *= 4;
     vertB *= 4;
     vertC *= 4;
     vertD *= 4;
-
-
 
     vec3 norm = triangleNormal(vertA, vertB, vertC);
     if(dot(norm, vec3(0, 1, 0)) < 0){
@@ -171,46 +189,40 @@ void main() {
 
     // debug info
     OUT[0].workgroupID = gl_GlobalInvocationID.x;
-    OUT[0].baseID = meshletDescriptions.descriptions[IN.baseID].start;
     OUT[0].coordinates = uvec2(fragmentXIndex, fragmentYIndex);
     OUT[0].pointID = pointID;
 
     OUT[1].workgroupID = gl_GlobalInvocationID.x;
-    OUT[1].baseID = meshletDescriptions.descriptions[IN.baseID].start;
     OUT[1].coordinates = uvec2(fragmentXIndex + 1, fragmentYIndex);
     OUT[1].pointID = pointID;
 
     OUT[2].workgroupID = gl_GlobalInvocationID.x;
-    OUT[2].baseID = meshletDescriptions.descriptions[IN.baseID].start;
     OUT[2].coordinates = uvec2(fragmentXIndex, fragmentYIndex + 1);
     OUT[2].pointID = pointID;
 
     OUT[3].workgroupID = gl_WorkGroupID.x;
-    OUT[3].baseID = meshletDescriptions.descriptions[IN.baseID].start;
     OUT[3].coordinates = uvec2(fragmentXIndex + 1, fragmentYIndex + 1);
     OUT[3].pointID = pointID;
 
     OUT[4].workgroupID = gl_WorkGroupID.x;
-    OUT[4].baseID = meshletDescriptions.descriptions[IN.baseID].start;
     OUT[4].coordinates = uvec2(fragmentXIndex + 1, fragmentYIndex);
     OUT[4].pointID = pointID;
 
     OUT[5].workgroupID = gl_WorkGroupID.x;
-    OUT[5].baseID = meshletDescriptions.descriptions[IN.baseID].start;
     OUT[5].coordinates = uvec2(fragmentXIndex, fragmentYIndex + 1);
     OUT[5].pointID = pointID;
 
 
     // triag 1
-    OUT[0].meshletID = IN.baseID;
+    OUT[0].meshletID = meshletID;
     OUT[0].wPos = vertA;
     OUT[0].wNormal = norm;
 
-    OUT[1].meshletID = IN.baseID;
+    OUT[1].meshletID = meshletID;
     OUT[1].wPos = vertB;
     OUT[1].wNormal = norm;
 
-    OUT[2].meshletID = IN.baseID;
+    OUT[2].meshletID = meshletID;
     OUT[2].wPos = vertC;
     OUT[2].wNormal = norm;
 
@@ -223,15 +235,15 @@ void main() {
     }
 
     // triag 2
-    OUT[3].meshletID = IN.baseID;
+    OUT[3].meshletID = meshletID;
     OUT[3].wPos = vertD;
     OUT[3].wNormal = norm;
 
-    OUT[4].meshletID = IN.baseID;
+    OUT[4].meshletID = meshletID;
     OUT[4].wPos = vertB;
     OUT[4].wNormal = norm;
 
-    OUT[5].meshletID = IN.baseID;
+    OUT[5].meshletID = meshletID;
     OUT[5].wPos = vertC;
     OUT[5].wNormal = norm;
 

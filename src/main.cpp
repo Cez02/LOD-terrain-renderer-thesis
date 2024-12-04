@@ -2,6 +2,7 @@
 #include <src/tr_window.hpp>
 #include <src/tr_renderer.hpp>
 #include <src/tr_shadercompiler.hpp>
+#include <src/tr_appconfig.hpp>
 
 #include <src/tr_logger.hpp>
 
@@ -25,6 +26,7 @@ int main(){
     // Vulkan setup
     mainRenderer.initVulkan(&mainWindow);
 
+    APP_CONFIG.print();
 
     // Scene setup
     log("Vulkan initialized. Initializaing scene data...");
@@ -71,7 +73,7 @@ int main(){
             playerPosition -= cam.getUpVector()  * deltaTime;
 
 
-        log("Camera rotations...");
+//        log("Camera rotations...");
 
         float rotateDelta = 0;
         if (glfwGetKey(mainWindow.getGLFWWindow(), GLFW_KEY_E) == GLFW_PRESS)
@@ -101,10 +103,10 @@ int main(){
         mainRenderer.getCamera().m_Rotation = glm::normalize(newRot);
 
         std::cout << std::endl;
-        std::cout << "Player position: " << glm::to_string(playerPosition) << std::endl;
-        std::cout << "Player rotation: " << glm::to_string(playerRotation) << std::endl;
-        std::cout << "Player rotation: " << glm::to_string(glm::eulerAngles(mainRenderer.getCamera().m_Rotation)) << std::endl;
-        std::cout << "Dot prod: " << dotProd << std::endl;
+//        std::cout << "Player position: " << glm::to_string(playerPosition) << std::endl;
+//        std::cout << "Player rotation: " << glm::to_string(playerRotation) << std::endl;
+//        std::cout << "Player rotation: " << glm::to_string(glm::eulerAngles(mainRenderer.getCamera().m_Rotation)) << std::endl;
+//        std::cout << "Dot prod: " << dotProd << std::endl;
 
         std::cout << std::endl;
 
@@ -114,7 +116,7 @@ int main(){
         mainRenderer.drawFrame(scene);
 
 
-        log("Calculating delta times");
+//        log("Calculating delta times");
         deltaTime = abs(glfwGetTime() - time);
         time = glfwGetTime();
 
