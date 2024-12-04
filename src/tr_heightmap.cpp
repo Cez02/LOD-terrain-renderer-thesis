@@ -220,7 +220,7 @@ void Heightmap::Bind(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLay
     data.Longitude = m_Longitude;
     data.BaseMeshletOffset = 0;
 
-    uint maxTasksEmitted = 32;
+    uint maxTasksEmitted = APP_CONFIG.m_MeshShaderConfig.m_MaxPreferredTaskWorkGroupInvocations;
 
     log("Drawing " + std::to_string(maxTasksEmitted) + " meshlets.");
 

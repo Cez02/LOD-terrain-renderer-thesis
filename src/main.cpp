@@ -48,6 +48,10 @@ int main(){
     float deltaTime = 0;
     float playerSpeed = 1.0;
 
+    float deltaTimeSum = 0;
+    float averageDeltaTime = 0;
+    int frameCount = 0;
+
     while(!glfwWindowShouldClose(mainWindow.getGLFWWindow())){
         glfwPollEvents();
 
@@ -120,6 +124,19 @@ int main(){
         deltaTime = abs(glfwGetTime() - time);
         time = glfwGetTime();
 
+        deltaTimeSum += deltaTime;
+        frameCount++;
+        if (frameCount > 10)
+        {
+            averageDeltaTime = deltaTimeSum / static_cast<float>(frameCount);
+            deltaTimeSum = deltaTime;
+            frameCount = 1;
+        }
+
+        std::string titleBase = "Terrain renderer (";
+        titleBase += std::to_string(averageDeltaTime * 1000.0f);
+        titleBase += " ms)";
+        glfwSetWindowTitle(mainWindow.getGLFWWindow(), titleBase.c_str());
     }
 
     mainRenderer.cleanup(scene);

@@ -260,13 +260,17 @@ bool Renderer::isDeviceSuitable(VkPhysicalDevice device) {
     // mesh shader props
     APP_CONFIG.m_MeshShaderConfig.m_MaxPreferredMeshWorkGroupInvocations = meshShaderProperties.maxPreferredMeshWorkGroupInvocations;
     APP_CONFIG.m_MeshShaderConfig.m_MaxPreferredTaskWorkGroupInvocations = meshShaderProperties.maxPreferredTaskWorkGroupInvocations;
-
-    APP_CONFIG.m_MeshShaderConfig.m_MaxMeshOutputPrimitives = meshShaderProperties.maxMeshOutputPrimitives;
-    APP_CONFIG.m_MeshShaderConfig.m_MaxMeshOutputVertices = meshShaderProperties.maxMeshOutputVertices;
+    // APP_CONFIG.m_MeshShaderConfig.m_MaxPreferredMeshWorkGroupInvocations = 64;
+    // APP_CONFIG.m_MeshShaderConfig.m_MaxPreferredTaskWorkGroupInvocations = 64;
+    //
+    APP_CONFIG.m_MeshShaderConfig.m_MaxMeshOutputPrimitives = APP_CONFIG.m_MeshShaderConfig.m_MaxPreferredMeshWorkGroupInvocations;
+    APP_CONFIG.m_MeshShaderConfig.m_MaxMeshOutputVertices = APP_CONFIG.m_MeshShaderConfig.m_MaxPreferredMeshWorkGroupInvocations;
+    // APP_CONFIG.m_MeshShaderConfig.m_MaxMeshOutputPrimitives = 64;
+    // APP_CONFIG.m_MeshShaderConfig.m_MaxMeshOutputVertices = 64;
 
     APP_CONFIG.m_MeshShaderConfig.m_MaxTaskWorkgroupCount = meshShaderProperties.maxTaskWorkGroupCount[0];
 
-    APP_CONFIG.m_MeshletInfo.m_MaxMeshletDimensionLength = glm::floor(glm::sqrt(meshShaderProperties.maxMeshOutputVertices));
+    APP_CONFIG.m_MeshletInfo.m_MaxMeshletDimensionLength = glm::floor(glm::sqrt(APP_CONFIG.m_MeshShaderConfig.m_MaxMeshOutputVertices));
 
     APP_CONFIG.m_MeshShaderConfig.m_MaxTaskWorkGroupInvocations = meshShaderProperties.maxTaskWorkGroupInvocations;
 
@@ -275,6 +279,8 @@ bool Renderer::isDeviceSuitable(VkPhysicalDevice device) {
 
     APP_CONFIG.m_MeshShaderConfig.m_MaxTaskWorkgroupSizeTotal = meshShaderProperties.maxTaskWorkGroupTotalCount;
 
+    // log("Max task workgroup size: " + std::to_string(APP_CONFIG.m_MeshShaderConfig.m_MaxTaskWorkgroupSizeTotal));
+    // log("Max task workgroup size: " + std::to_string(APP_CONFIG.m_MeshShaderConfig.m_MaxTaskWorkgroupSizeTotal));
 
     // the rest
 
