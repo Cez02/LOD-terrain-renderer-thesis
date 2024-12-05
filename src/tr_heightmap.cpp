@@ -55,11 +55,14 @@ void LoadTerrain(std::string path, float **dst, size_t *size, float *latitude, f
     inputfile.close();
 }
 
-void Heightmap::Init(std::string dataPath, VkDevice device, VkPhysicalDevice physicalDevice) {
+Heightmap::Heightmap(std::string dataPath)
+    : m_DataPath(dataPath) { }
+
+void Heightmap::Init(VkDevice device, VkPhysicalDevice physicalDevice) {
 
     // load data
 
-    LoadTerrain(dataPath, &m_Data, &m_DataSize, &m_Latitude, &m_Longitude);
+    LoadTerrain(m_DataPath, &m_Data, &m_DataSize, &m_Latitude, &m_Longitude);
 
 
     std::cout << "Loaded terrain of buffer size: " << m_DataSize << std::endl;
@@ -77,7 +80,7 @@ void Heightmap::Init(std::string dataPath, VkDevice device, VkPhysicalDevice phy
     int sizePerLine = 0;
     uint organizedDataOffset = 0;
 
-    int maxMeshletSize = APP_CONFIG.m_MeshletInfo.m_MaxMeshletDimensionLength;
+    int maxMeshletSize = APP_CONFIG.m_MeshletInfo.m_MeshletLength;
     for(int y = 0; y<lengthOfHeightmap - 1; y += maxMeshletSize) {
         int dataPointer = 0;
         sizePerLine = 0;
@@ -91,13 +94,13 @@ void Heightmap::Init(std::string dataPath, VkDevice device, VkPhysicalDevice phy
             description.Offset = uvec2(x, y);
 
             if (x + maxMeshletSize > lengthOfHeightmap - 1) {
-                description.Dimensions.x = lengthOfHeightmap - 1 - x;
+                description.Dimensions.x = lengthOfHeightmap - x;
             } else {
                 description.Dimensions.x = maxMeshletSize;
             }
 
             if (y + maxMeshletSize > lengthOfHeightmap - 1) {
-                description.Dimensions.y = lengthOfHeightmap - 1 - y;
+                description.Dimensions.y = lengthOfHeightmap - y;
             } else {
                 description.Dimensions.y = maxMeshletSize;
             }
@@ -219,10 +222,13 @@ void Heightmap::Bind(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLay
     data.Latitude = m_Latitude;
     data.Longitude = m_Longitude;
     data.BaseMeshletOffset = 0;
+    data.LODLevel = APP_CONFIG.m_LODLevel;
 
     uint maxTasksEmitted = APP_CONFIG.m_MeshShaderConfig.m_MaxPreferredTaskWorkGroupInvocations;
 
-    log("Drawing " + std::to_string(maxTasksEmitted) + " meshlets.");
+    // log("Drawing " + std::to_string(maxTasksEmitted) + " meshlets.");
+
+    int k =0;
 
     for(int i = 0; i<m_Meshlets.size();) {
         data.BaseMeshletOffset = i;
@@ -239,6 +245,10 @@ void Heightmap::Bind(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLay
         vkCmdDrawMeshTasksEXT(commandBuffer, emittedTasks, 1, 1);
 
         i += emittedTasks;
+        k++;
+
+        // if (k == 3)
+        //     break;
     }
 }
 

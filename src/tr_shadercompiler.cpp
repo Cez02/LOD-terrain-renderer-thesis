@@ -56,7 +56,7 @@ namespace shaders{
         replace(content, "$m_MaxPreferredTaskWorkGroupInvocations", to_string(APP_CONFIG.m_MeshShaderConfig.m_MaxPreferredTaskWorkGroupInvocations));
         replace(content, "$m_MaxMeshOutputVertices", to_string(APP_CONFIG.m_MeshShaderConfig.m_MaxMeshOutputVertices));
         replace(content, "$m_MaxMeshOutputPrimitives", to_string(APP_CONFIG.m_MeshShaderConfig.m_MaxMeshOutputPrimitives));
-        replace(content, "$maxMeshletDimensionLength", to_string(APP_CONFIG.m_MeshletInfo.m_MaxMeshletDimensionLength));
+        replace(content, "$meshletLength", to_string(APP_CONFIG.m_MeshletInfo.m_MeshletLength));
 
         replace(content, "$m_MaxTaskWorkgroupSize", to_string(APP_CONFIG.m_MeshShaderConfig.maxTaskWorkGroupSize[0]));
         replace(content, "$m_MaxMeshWorkgroupSize", to_string(APP_CONFIG.m_MeshShaderConfig.maxMeshWorkGroupSize[0]));

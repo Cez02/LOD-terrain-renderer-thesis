@@ -31,22 +31,24 @@ int main(){
     // Scene setup
     log("Vulkan initialized. Initializaing scene data...");
     SceneData scene;
-    scene.getHeightmaps().emplace_back();
+    scene.getHeightmaps().emplace_back("./heightmaps/N44E013.hgt");
+    scene.getHeightmaps().emplace_back("./heightmaps/N44E014.hgt");
+    scene.getHeightmaps().emplace_back("./heightmaps/N44E015.hgt");
     mainRenderer.initVKSceneElements(scene);
 
     scene.getCamera() = Camera();
-    scene.getCamera().m_Position = glm::vec3(0, 0, 0);
+    scene.getCamera().m_Position = glm::vec3(8359, 33461, 36210);
     scene.getCamera().m_Rotation = glm::quat(glm::vec3(0, 0, 0));
 
 
     // App logic
     log("Setup complete. Starting application loop.");
-    glm::vec3 playerPosition = glm::vec3(0.0f);
+    glm::vec3 playerPosition = glm::vec3(8359, 33461, 36210);
     glm::vec3 playerRotation = glm::vec3(0.0f);
 
     float time = glfwGetTime();
     float deltaTime = 0;
-    float playerSpeed = 1.0;
+    float playerSpeed = 1000.0;
 
     float deltaTimeSum = 0;
     float averageDeltaTime = 0;
@@ -62,19 +64,28 @@ int main(){
         Camera cam = mainRenderer.getCamera();
 
         if (glfwGetKey(mainWindow.getGLFWWindow(), GLFW_KEY_W) == GLFW_PRESS)
-            playerPosition += cam.getForwardVector() * deltaTime;
+            playerPosition += cam.getForwardVector() * deltaTime * playerSpeed;
         if (glfwGetKey(mainWindow.getGLFWWindow(), GLFW_KEY_S) == GLFW_PRESS)
-            playerPosition -= cam.getForwardVector()  * deltaTime;
+            playerPosition -= cam.getForwardVector()  * deltaTime * playerSpeed;
 
         if (glfwGetKey(mainWindow.getGLFWWindow(), GLFW_KEY_A) == GLFW_PRESS)
-            playerPosition += cam.getRightVector()  * deltaTime;
+            playerPosition += cam.getRightVector()  * deltaTime * playerSpeed;
         if (glfwGetKey(mainWindow.getGLFWWindow(), GLFW_KEY_D) == GLFW_PRESS)
-            playerPosition -= cam.getRightVector()  * deltaTime;
+            playerPosition -= cam.getRightVector()  * deltaTime * playerSpeed;
 
         if (glfwGetKey(mainWindow.getGLFWWindow(), GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS)
-            playerPosition += cam.getUpVector()  * deltaTime;
+            playerPosition += cam.getUpVector()  * deltaTime * playerSpeed;
         if (glfwGetKey(mainWindow.getGLFWWindow(), GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS)
-            playerPosition -= cam.getUpVector()  * deltaTime;
+            playerPosition -= cam.getUpVector()  * deltaTime * playerSpeed;
+
+        if (glfwGetKey(mainWindow.getGLFWWindow(), GLFW_KEY_1) == GLFW_PRESS)
+            APP_CONFIG.m_LODLevel = 1;
+        if (glfwGetKey(mainWindow.getGLFWWindow(), GLFW_KEY_2) == GLFW_PRESS)
+            APP_CONFIG.m_LODLevel = 2;
+        if (glfwGetKey(mainWindow.getGLFWWindow(), GLFW_KEY_3) == GLFW_PRESS)
+            APP_CONFIG.m_LODLevel = 4;
+        if (glfwGetKey(mainWindow.getGLFWWindow(), GLFW_KEY_4) == GLFW_PRESS)
+            APP_CONFIG.m_LODLevel = 8;
 
 
 //        log("Camera rotations...");
@@ -135,8 +146,12 @@ int main(){
 
         std::string titleBase = "Terrain renderer (";
         titleBase += std::to_string(averageDeltaTime * 1000.0f);
-        titleBase += " ms)";
-        glfwSetWindowTitle(mainWindow.getGLFWWindow(), titleBase.c_str());
+
+        std::stringstream stream;
+        stream << "Terrain renderer (" << std::fixed << std::setprecision(2) << (averageDeltaTime * 1000.0f) << " ms, " << (1.0f / averageDeltaTime) << " FPS)";
+        std::string s = stream.str();
+
+        glfwSetWindowTitle(mainWindow.getGLFWWindow(), s.c_str());
     }
 
     mainRenderer.cleanup(scene);

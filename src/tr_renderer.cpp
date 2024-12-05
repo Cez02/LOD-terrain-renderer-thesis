@@ -258,19 +258,19 @@ bool Renderer::isDeviceSuitable(VkPhysicalDevice device) {
     vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
 
     // mesh shader props
-    APP_CONFIG.m_MeshShaderConfig.m_MaxPreferredMeshWorkGroupInvocations = meshShaderProperties.maxPreferredMeshWorkGroupInvocations;
-    APP_CONFIG.m_MeshShaderConfig.m_MaxPreferredTaskWorkGroupInvocations = meshShaderProperties.maxPreferredTaskWorkGroupInvocations;
-    // APP_CONFIG.m_MeshShaderConfig.m_MaxPreferredMeshWorkGroupInvocations = 64;
-    // APP_CONFIG.m_MeshShaderConfig.m_MaxPreferredTaskWorkGroupInvocations = 64;
+    // APP_CONFIG.m_MeshShaderConfig.m_MaxPreferredMeshWorkGroupInvocations = meshShaderProperties.maxPreferredMeshWorkGroupInvocations;
+    // APP_CONFIG.m_MeshShaderConfig.m_MaxPreferredTaskWorkGroupInvocations = meshShaderProperties.maxPreferredTaskWorkGroupInvocations;
+    APP_CONFIG.m_MeshShaderConfig.m_MaxPreferredMeshWorkGroupInvocations = 64;
+    APP_CONFIG.m_MeshShaderConfig.m_MaxPreferredTaskWorkGroupInvocations = 64;
     //
-    APP_CONFIG.m_MeshShaderConfig.m_MaxMeshOutputPrimitives = APP_CONFIG.m_MeshShaderConfig.m_MaxPreferredMeshWorkGroupInvocations;
-    APP_CONFIG.m_MeshShaderConfig.m_MaxMeshOutputVertices = APP_CONFIG.m_MeshShaderConfig.m_MaxPreferredMeshWorkGroupInvocations;
-    // APP_CONFIG.m_MeshShaderConfig.m_MaxMeshOutputPrimitives = 64;
-    // APP_CONFIG.m_MeshShaderConfig.m_MaxMeshOutputVertices = 64;
+    // APP_CONFIG.m_MeshShaderConfig.m_MaxMeshOutputPrimitives = APP_CONFIG.m_MeshShaderConfig.m_MaxPreferredMeshWorkGroupInvocations;
+    // APP_CONFIG.m_MeshShaderConfig.m_MaxMeshOutputVertices = APP_CONFIG.m_MeshShaderConfig.m_MaxPreferredMeshWorkGroupInvocations;
+    APP_CONFIG.m_MeshShaderConfig.m_MaxMeshOutputPrimitives = 64;
+    APP_CONFIG.m_MeshShaderConfig.m_MaxMeshOutputVertices = 64;
 
     APP_CONFIG.m_MeshShaderConfig.m_MaxTaskWorkgroupCount = meshShaderProperties.maxTaskWorkGroupCount[0];
 
-    APP_CONFIG.m_MeshletInfo.m_MaxMeshletDimensionLength = glm::floor(glm::sqrt(APP_CONFIG.m_MeshShaderConfig.m_MaxMeshOutputVertices));
+    APP_CONFIG.m_MeshletInfo.m_MeshletLength = 8; // Fixed length
 
     APP_CONFIG.m_MeshShaderConfig.m_MaxTaskWorkGroupInvocations = meshShaderProperties.maxTaskWorkGroupInvocations;
 
@@ -765,13 +765,13 @@ void Renderer::createDescriptorSetLayout() {
 void Renderer::createDescriptorPool() {
     VkDescriptorPoolSize poolSize{};
     poolSize.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    poolSize.descriptorCount = MAX_FRAMES_IN_FLIGHT + MAX_FRAMES_IN_FLIGHT;
+    poolSize.descriptorCount = 3 * (MAX_FRAMES_IN_FLIGHT + MAX_FRAMES_IN_FLIGHT);
 
     VkDescriptorPoolCreateInfo poolInfo{};
     poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     poolInfo.poolSizeCount = 1;
     poolInfo.pPoolSizes = &poolSize;
-    poolInfo.maxSets = static_cast<uint32_t>(2 * MAX_FRAMES_IN_FLIGHT);
+    poolInfo.maxSets = static_cast<uint32_t>(3 * 2 * MAX_FRAMES_IN_FLIGHT);
 
     if (vkCreateDescriptorPool(m_Device, &poolInfo, nullptr, &m_DescriptorPool) != VK_SUCCESS) {
         throw std::runtime_error("failed to create descriptor pool!");
@@ -870,7 +870,7 @@ void Renderer::createGraphicsPipeline()
     rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
     rasterizer.lineWidth = 1.0f;
 
-    rasterizer.cullMode = VK_CULL_MODE_NONE; // for now
+    rasterizer.cullMode = VK_CULL_MODE_BACK_BIT; // for now
     rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
 
     rasterizer.depthBiasEnable = VK_FALSE;
@@ -1295,8 +1295,10 @@ Camera &Renderer::getCamera() {
 }
 
 void Renderer::initVKSceneElements(SceneData &scene) {
+    int heightmapIndex = 0;
     for(auto &heightmap : scene.getHeightmaps()){
-        heightmap.Init("./heightmaps/N42E013.hgt", m_Device, m_PhysicalDevice);
+        heightmap.Init(m_Device, m_PhysicalDevice);
+        heightmapIndex++;
 
         heightmap.m_DescriptorSets.m_DescriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
 

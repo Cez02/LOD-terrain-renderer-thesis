@@ -25,8 +25,10 @@ public:
     } m_MeshShaderConfig;
 
     struct MeshletInfo {
-        uint32_t m_MaxMeshletDimensionLength;
+        uint32_t m_MeshletLength;
     } m_MeshletInfo;
+
+    uint32_t m_LODLevel = 4;
 
     void print();
 };

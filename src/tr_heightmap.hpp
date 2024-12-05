@@ -11,6 +11,7 @@ struct HeightmapPushConstantData {
     uint BaseMeshletOffset;
     float Longitude;
     float Latitude;
+    uint LODLevel;
 };
 
 class Heightmap {
@@ -25,6 +26,7 @@ public:
     size_t m_DataSize;
     std::vector<MeshletDescription> m_Meshlets;
 
+    std::string m_DataPath;
     float m_Longitude, m_Latitude;
 
     VkDevice m_Device;
@@ -37,9 +39,9 @@ public:
 
     DescriptorSetBundle m_DescriptorSets;
 
+    Heightmap(std::string dataPath);
 
-
-    void Init(std::string dataPath, VkDevice device, VkPhysicalDevice physicalDevice);
+    void Init(VkDevice device, VkPhysicalDevice physicalDevice);
     void Deinit();
 
     void Bind(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLayout, int frame);

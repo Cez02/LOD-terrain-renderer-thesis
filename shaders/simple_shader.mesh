@@ -39,6 +39,7 @@ layout( push_constant ) uniform constants
 
 // Task shader input
 
+#define MAX_MESHLET_LENGTH CMN_MESHLET_LENGTH
 #define MAX_MESHLET_SIZE CMN_MAX_MESH_OUTPUT_VERTICES
 
 struct Task {
@@ -50,6 +51,8 @@ struct Task {
 
     float Longitude;
     float Latitude;
+
+    uint LODLevel;
 };
 taskPayloadSharedEXT Task IN;
 
@@ -61,18 +64,36 @@ uint meshletID = IN.meshletID;
 
 uint laneID = gl_LocalInvocationID.x;
 
-
 // Output
 
 layout(location=0) out Interpolants {
     vec3  wPos;
     vec3  wNormal;
+    vec3  wColor;
     flat uint meshletID;
     flat uint workgroupID;
     flat uvec2 coordinates;
     uint pointID;
 } OUT[];
 
+
+// Utils
+
+uvec2 getThisPointINDeltaOffset(){
+    MeshletDescription meshlet;
+    meshlet.Dimensions = meshletDescriptions.descriptions[IN.meshletID].Dimensions;
+
+    // we transform workgroupID from local to global of max meshlet
+    // this is done to avoid cases where meshlet size is smaller than the globally defined max length
+    uint workGroupIDGlobal = (gl_WorkGroupID.x / meshlet.Dimensions.y) * MAX_MESHLET_LENGTH + gl_WorkGroupID.x % meshlet.Dimensions.x;
+
+    return IN.deltas[workGroupIDGlobal];
+}
+
+// get the global workgroup id
+uint getPointWorkGroupID(uvec2 coordinates){
+    return coordinates.y * MAX_MESHLET_LENGTH + coordinates.x;
+}
 
 float PI = 3.1415926;
 
@@ -89,64 +110,66 @@ vec3 triangleNormal(vec3 a, vec3 b, vec3 c){
 
 }
 
-vec3 polarToCartesian(float lat, float lon){
-    return vec3( lon * sin(lat),
-                 0,
-                 lat
-    );
+vec3 polarToCartesian(float lat, float lon, float height){
+    float r = 50000 + height * 1 * 50000 / 6371000;
+    return vec3( r * cos(lat) * sin(lon),
+                 r * sin(lat),
+                 r * cos(lat) * cos(lon)
+                  );
 }
 
 uvec2 getPos(uvec2 pointOffset){
-    uvec2 pointCoordinates = meshletDescriptions.descriptions[IN.meshletID].Offset + IN.deltas[gl_WorkGroupID.x];
+    uvec2 pointCoordinates = getThisPointINDeltaOffset();
 
-    uint fragmentXIndex = pointCoordinates.x;
-    uint fragmentYIndex = pointCoordinates.y;
-
-    return uvec2( fragmentXIndex + pointOffset.x, fragmentYIndex + pointOffset.y);
+    return pointCoordinates + pointOffset;
 }
 
-vec2 localPolarOffset(uvec2 pointOffset){
-    uvec2 localPos = getPos(pointOffset);
+vec2 localPolarOffset(uvec2 offset){
+    vec2 localPos = getPos(offset);
 
-    vec2 localPosF = vec2( float(localPos.x), float(localPos.y) ) / 1201;
+    localPos /= 1201;
 
-    localPosF *= (PI/180);
+    localPos *= (PI/180);
 
-    return localPosF;
+    return localPos;
 }
+
+vec3 getColorFromHeight(float height){
+    vec3 Color = vec3(0.5, 0.5, 0.5);
+
+    if(height == 0.5) Color = vec3(0.6, 0, 0.6);
+    else if      (height <= 0  )   Color = vec3(0.,       0.,        1.); //blue
+    else if (height < 500)   Color = vec3(0.,       height/500,    0.); //->green
+    else if (height < 1000)  Color = vec3(height/500-1, 1.,        0.); //->yellow
+    else if (height < 2000)  Color = vec3(1.,       2.-height/1000,0.); //->red
+    else                      Color = vec3(1.,       height/2000-1 ,height/2000-1);  //->white
+
+    return Color;
+}
+
 
 void main() {
 
-/*
-    uint pointID = meshletDescriptions.descriptions[IN.baseID].start + IN.deltaIDs[gl_WorkGroupID.x];
-
-    float latitude = 0;
-    float longitude = 0;
-
-    vec2 polarOffset = localPolarOffset(uvec2(0, 0));
-    vec3 vertA = polarToCartesian(latitude + polarOffset.y, longitude + polarOffset.x) * 10000;
-
-    polarOffset = localPolarOffset(uvec2(1, 0));
-    vec3 vertB = polarToCartesian(latitude + polarOffset.y, longitude + polarOffset.x) * 10000;
-
-    polarOffset = localPolarOffset(uvec2(0, 1));
-    vec3 vertC = polarToCartesian(latitude + polarOffset.y, longitude + polarOffset.x) * 10000;
-
-    polarOffset = localPolarOffset(uvec2(1, 1));
-    vec3 vertD = polarToCartesian(latitude + polarOffset.y, longitude + polarOffset.x) * 10000;
-*/
-
-// Old system
+    // Get point data
 
     MeshletDescription meshlet;
     meshlet.Offset = meshletDescriptions.descriptions[IN.meshletID].Offset;
     meshlet.Dimensions = meshletDescriptions.descriptions[IN.meshletID].Dimensions;
     meshlet.HeightmapDataOffset = meshletDescriptions.descriptions[IN.meshletID].HeightmapDataOffset;
 
-    uvec2 pointCoordinates = meshlet.Offset + IN.deltas[gl_WorkGroupID.x];
+    uvec2 pointCoordinates = getThisPointINDeltaOffset();
 
-    if (pointCoordinates.x + meshlet.Dimensions.x >= IN.heightmap_length ||
-        pointCoordinates.y + meshlet.Dimensions.y >= IN.heightmap_length ){
+    // Check if points cross the heightmap border
+    if (pointCoordinates.x + meshlet.Offset.x >= IN.heightmap_length ||
+        pointCoordinates.y + meshlet.Offset.y >= IN.heightmap_length ){
+        SetMeshOutputsEXT(0, 0);
+
+        return;
+    }
+
+    // Check if points cross the meshlet border
+    if (pointCoordinates.x >= meshlet.Dimensions.x ||
+        pointCoordinates.y >= meshlet.Dimensions.y ){
         SetMeshOutputsEXT(0, 0);
 
         return;
@@ -164,14 +187,46 @@ void main() {
     uint pointID = pointCoordinates.x + pointCoordinates.y * IN.heightmap_length;
 
 
+
+    // Calculate vertices
+
     uint dataOffset = meshlet.HeightmapDataOffset;
-    u8vec2 pointDelta = IN.deltas[gl_WorkGroupID.x];
 
-    uint offsetLinearA = uint(pointDelta.x) + uint(pointDelta.y) * (meshlet.Dimensions.x + 1);
-    uint offsetLinearB = uint(pointDelta.x + 1) + uint(pointDelta.y) * (meshlet.Dimensions.x + 1);
-    uint offsetLinearC = uint(pointDelta.x) + uint(pointDelta.y + 1) * (meshlet.Dimensions.x + 1);
-    uint offsetLinearD = uint(pointDelta.x + 1) + uint(pointDelta.y + 1) * (meshlet.Dimensions.x + 1);
+    // taken from IN.deltas already
+    uvec2 deltaOffsetA = pointCoordinates;
+    uvec2 deltaOffsetB = deltaOffsetA + uvec2(IN.LODLevel, 0);
+    uvec2 deltaOffsetC = deltaOffsetA + uvec2(0, IN.LODLevel);
+    uvec2 deltaOffsetD = deltaOffsetA + uvec2(IN.LODLevel, IN.LODLevel);
 
+    uint offsetLinearA = uint(deltaOffsetA.x) + uint(deltaOffsetA.y) * (meshlet.Dimensions.x + 1);
+    uint offsetLinearB = uint(deltaOffsetB.x) + uint(deltaOffsetB.y) * (meshlet.Dimensions.x + 1);
+    uint offsetLinearC = uint(deltaOffsetC.x) + uint(deltaOffsetC.y) * (meshlet.Dimensions.x + 1);
+    uint offsetLinearD = uint(deltaOffsetD.x) + uint(deltaOffsetD.y) * (meshlet.Dimensions.x + 1);
+
+
+
+
+    float latitude = IN.Latitude;
+    float longitude = IN.Longitude;
+
+    float heightVertA = heightmapData.m_Heights[offsetLinearA + dataOffset];
+    float heightVertB = heightmapData.m_Heights[offsetLinearB + dataOffset];
+    float heightVertC = heightmapData.m_Heights[offsetLinearC + dataOffset];
+    float heightVertD = heightmapData.m_Heights[offsetLinearD + dataOffset];
+
+    vec2 polarOffset = localPolarOffset(meshlet.Offset + uvec2(0, 0));
+    vec3 vertA = polarToCartesian(latitude + polarOffset.y, longitude + polarOffset.x, heightmapData.m_Heights[offsetLinearA + dataOffset]);
+
+    polarOffset = localPolarOffset(meshlet.Offset + uvec2(IN.LODLevel, 0));
+    vec3 vertB = polarToCartesian(latitude + polarOffset.y, longitude + polarOffset.x, heightmapData.m_Heights[offsetLinearB + dataOffset]);
+
+    polarOffset = localPolarOffset(meshlet.Offset + uvec2(0, IN.LODLevel));
+    vec3 vertC = polarToCartesian(latitude + polarOffset.y, longitude + polarOffset.x, heightmapData.m_Heights[offsetLinearC + dataOffset]);
+
+    polarOffset = localPolarOffset(meshlet.Offset + uvec2(IN.LODLevel, IN.LODLevel));
+    vec3 vertD = polarToCartesian(latitude + polarOffset.y, longitude + polarOffset.x, heightmapData.m_Heights[offsetLinearD + dataOffset]);
+
+/*
     vec3 vertA = vec3( float(fragmentXIndex) / hglen, heightmapData.m_Heights[offsetLinearA + dataOffset] / 50000.0f, float(fragmentYIndex) / hglen);
     vec3 vertC = vec3( float(fragmentXIndex + 1) / hglen, heightmapData.m_Heights[offsetLinearB + dataOffset] / 50000.0f, float(fragmentYIndex) / hglen);
     vec3 vertB = vec3( float(fragmentXIndex) / hglen, heightmapData.m_Heights[offsetLinearC + dataOffset] / 50000.0f, float(fragmentYIndex + 1) / hglen);
@@ -181,12 +236,15 @@ void main() {
     vertB *= 4;
     vertC *= 4;
     vertD *= 4;
+*/
 
-    vec3 norm = triangleNormal(vertA, vertB, vertC);
+
+    vec3 norm = triangleNormal(vertB, vertA, vertC);
+    /*
     if(dot(norm, vec3(0, 1, 0)) < 0){
         norm *= -1;
     }
-
+    */
     // debug info
     OUT[0].workgroupID = gl_GlobalInvocationID.x;
     OUT[0].coordinates = uvec2(fragmentXIndex, fragmentYIndex);
@@ -216,36 +274,44 @@ void main() {
     // triag 1
     OUT[0].meshletID = meshletID;
     OUT[0].wPos = vertA;
-    OUT[0].wNormal = norm;
+    //OUT[0].wNormal = norm;
+    OUT[0].wColor = getColorFromHeight(heightVertA);
 
     OUT[1].meshletID = meshletID;
     OUT[1].wPos = vertB;
-    OUT[1].wNormal = norm;
+    //OUT[1].wNormal = norm;
+    OUT[1].wColor = getColorFromHeight(heightVertB);
 
     OUT[2].meshletID = meshletID;
     OUT[2].wPos = vertC;
-    OUT[2].wNormal = norm;
+    //OUT[2].wNormal = norm;
+    OUT[2].wColor = getColorFromHeight(heightVertC);
 
 
 
 
     norm = triangleNormal(vertD, vertB, vertC);
+    /*
     if(dot(norm, vec3(0, 1, 0)) < 0){
         norm *= -1;
     }
+    */
 
     // triag 2
     OUT[3].meshletID = meshletID;
     OUT[3].wPos = vertD;
-    OUT[3].wNormal = norm;
+    //OUT[3].wNormal = norm;
+    OUT[3].wColor = getColorFromHeight(heightVertD);
 
     OUT[4].meshletID = meshletID;
     OUT[4].wPos = vertB;
-    OUT[4].wNormal = norm;
+    //OUT[4].wNormal = norm;
+    OUT[4].wColor = getColorFromHeight(heightVertB);
 
     OUT[5].meshletID = meshletID;
     OUT[5].wPos = vertC;
-    OUT[5].wNormal = norm;
+    //OUT[5].wNormal = norm;
+    OUT[5].wColor = getColorFromHeight(heightVertC);
 
 
     /*
@@ -264,7 +330,7 @@ void main() {
     gl_MeshVerticesEXT[5].gl_Position = gl_MeshVerticesEXT[2].gl_Position;
 
 
-    gl_PrimitiveTriangleIndicesEXT[0] = uvec3(0, 1, 2);
+    gl_PrimitiveTriangleIndicesEXT[0] = uvec3(1, 0, 2);
     gl_PrimitiveTriangleIndicesEXT[1] = uvec3(3, 4, 5);
 
 

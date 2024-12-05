@@ -25,7 +25,9 @@ layout( push_constant ) uniform constants
     uint BaseMeshletOffset;
     float Longitude;
     float Latitude;
+    uint LODLevel;
 } PushConstants;
+
 
 
 // SSBOs
@@ -58,6 +60,8 @@ struct Task {
 
     float Longitude;
     float Latitude;
+
+    uint LODLevel;
 };
 
 taskPayloadSharedEXT Task OUT;
@@ -72,12 +76,16 @@ void main() {
     OUT.heightmap_length = PushConstants.HeightmapLength;
     OUT.Longitude = PushConstants.Longitude;
     OUT.Latitude = PushConstants.Latitude;
+    OUT.LODLevel = PushConstants.LODLevel;
 
-    for(int i = 0; i<CMN_MAX_MESHLET_DIMENSION_LENGTH; i++) {
-        for (int j = 0; j < CMN_MAX_MESHLET_DIMENSION_LENGTH; j++)
+    for(int i = 0; i<CMN_MESHLET_LENGTH ; i++) {
+        for (int j = 0; j < CMN_MESHLET_LENGTH; j++)
         {
-            OUT.deltas[i * CMN_MAX_MESHLET_DIMENSION_LENGTH + j] = u8vec2(j, i);
+            // We set the indexes in accordance with LOD level
+            OUT.deltas[i * CMN_MESHLET_LENGTH + j] = u8vec2( min(j * PushConstants.LODLevel, CMN_MESHLET_LENGTH + 1) , min(i * PushConstants.LODLevel, CMN_MESHLET_LENGTH + 1));
         }
     }
-    EmitMeshTasksEXT(CMN_MAX_MESHLET_DIMENSION_LENGTH * CMN_MAX_MESHLET_DIMENSION_LENGTH, 1, 1);
+
+    // We only emit as many mesh shaders as we need
+    EmitMeshTasksEXT(meshletDescriptions.descriptions[OUT.meshletID].Dimensions.x * meshletDescriptions.descriptions[OUT.meshletID].Dimensions.y, 1, 1);
 }

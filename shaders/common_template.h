@@ -27,7 +27,7 @@
 using namespace glm;
 #endif
 
-#define CMN_MAX_MESHLET_DIMENSION_LENGTH $maxMeshletDimensionLength
+#define CMN_MESHLET_LENGTH $meshletLength
 
 
 struct

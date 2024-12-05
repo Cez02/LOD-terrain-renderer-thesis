@@ -5,9 +5,9 @@
 #include "tr_camera.hpp"
 
 Camera::Camera() {
-    m_FarClipPlane = 10.0f;
+    m_FarClipPlane = 100000.0f;
     m_FOV = 45.0f;
-    m_NearClipPlane = 0.01;
+    m_NearClipPlane = 0.1;
 }
 
 glm::mat4 Camera::getViewMatrix() {
