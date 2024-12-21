@@ -31,9 +31,19 @@ int main(){
     // Scene setup
     log("Vulkan initialized. Initializaing scene data...");
     SceneData scene;
-    scene.getHeightmaps().emplace_back("./heightmaps/N44E013.hgt");
-    scene.getHeightmaps().emplace_back("./heightmaps/N44E014.hgt");
-    scene.getHeightmaps().emplace_back("./heightmaps/N44E015.hgt");
+
+    // scene.getHeightmaps().emplace_back("./heightmaps/N42E013.hgt");
+    // scene.getHeightmaps().emplace_back("./heightmaps/N44E014.hgt");
+    // scene.getHeightmaps().emplace_back("./heightmaps/N44E015.hgt");
+
+    // load all files in heightmaps directory
+    for (auto dir : std::filesystem::directory_iterator("./heightmaps"))
+    {
+        if (!dir.is_directory())
+            scene.getHeightmaps().emplace_back(dir.path());
+    }
+
+
     mainRenderer.initVKSceneElements(scene);
 
     scene.getCamera() = Camera();

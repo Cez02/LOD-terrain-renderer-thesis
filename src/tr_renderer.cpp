@@ -24,7 +24,7 @@
 #include <fstream>
 #include <array>
 
-#include "src/tr_mesh.hpp"
+#include "vk_ext_mesh_shader.h"
 
 SwapChainSupportDetails Renderer::querySwapChainSupport(VkPhysicalDevice device)
 {
@@ -262,7 +262,7 @@ bool Renderer::isDeviceSuitable(VkPhysicalDevice device) {
     // APP_CONFIG.m_MeshShaderConfig.m_MaxPreferredTaskWorkGroupInvocations = meshShaderProperties.maxPreferredTaskWorkGroupInvocations;
     APP_CONFIG.m_MeshShaderConfig.m_MaxPreferredMeshWorkGroupInvocations = 64;
     APP_CONFIG.m_MeshShaderConfig.m_MaxPreferredTaskWorkGroupInvocations = 64;
-    //
+
     // APP_CONFIG.m_MeshShaderConfig.m_MaxMeshOutputPrimitives = APP_CONFIG.m_MeshShaderConfig.m_MaxPreferredMeshWorkGroupInvocations;
     // APP_CONFIG.m_MeshShaderConfig.m_MaxMeshOutputVertices = APP_CONFIG.m_MeshShaderConfig.m_MaxPreferredMeshWorkGroupInvocations;
     APP_CONFIG.m_MeshShaderConfig.m_MaxMeshOutputPrimitives = 64;
@@ -720,7 +720,7 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
     // draw meshes
     for(auto & heightmap : scene.getHeightmaps()) {
         heightmap.Bind(commandBuffer, m_PipelineLayout, m_CurrentFrame);
-        //heightmap.Draw(commandBuffer);
+        heightmap.Draw(commandBuffer, m_PipelineLayout);
     }
 
     vkCmdEndRenderPass(commandBuffer);
@@ -1296,38 +1296,35 @@ Camera &Renderer::getCamera() {
 
 void Renderer::initVKSceneElements(SceneData &scene) {
     int heightmapIndex = 0;
+    std::vector<VkDescriptorSetLayout> layouts(1, m_DescriptorSetLayout);
+
     for(auto &heightmap : scene.getHeightmaps()){
         heightmap.Init(m_Device, m_PhysicalDevice);
         heightmapIndex++;
 
         heightmap.m_DescriptorSets.m_DescriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
 
-        // setup descriptor sets
+        // setup descriptor sets for each heightmap
         for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
             // allocate set for heightmap data
-            std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, m_DescriptorSetLayout);
             VkDescriptorSetAllocateInfo allocInfo{};
             allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
             allocInfo.descriptorPool = m_DescriptorPool;
             allocInfo.descriptorSetCount = 1;
             allocInfo.pSetLayouts = layouts.data();
 
-            VkDescriptorSet descriptorSet;
-
             log("Initializing heightmap buffer descriptor set");
 
             VkResult returnCode = VK_SUCCESS;
-            if ((returnCode = vkAllocateDescriptorSets(m_Device, &allocInfo, &descriptorSet)) != VK_SUCCESS) {
+            if ((returnCode = vkAllocateDescriptorSets(m_Device, &allocInfo, &heightmap.m_DescriptorSets.m_DescriptorSets[i])) != VK_SUCCESS) {
                 throw std::runtime_error("failed to allocate descriptor sets! " + std::string(string_VkResult(returnCode)));
             }
-
-            heightmap.m_DescriptorSets.m_DescriptorSets[i] = descriptorSet;
 
             // bind heightmap buffer to descriptor set
             VkDescriptorBufferInfo heightmapBufferInfo{};
             heightmapBufferInfo.buffer = heightmap.m_HeightmapDataBuffer;
             heightmapBufferInfo.offset = 0;
-            heightmapBufferInfo.range = heightmap.m_DataSize;
+            heightmapBufferInfo.range = heightmap.m_DataOrganizedForMeshlets.size() * sizeof(heightmap.m_DataOrganizedForMeshlets[0]);
 
             VkWriteDescriptorSet descriptorHeightmapWrite{};
             descriptorHeightmapWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -1368,8 +1365,6 @@ void Renderer::initVKSceneElements(SceneData &scene) {
             };
 
             vkUpdateDescriptorSets(m_Device, 2, writes, 0, nullptr);
-
-
         }
     }
 }

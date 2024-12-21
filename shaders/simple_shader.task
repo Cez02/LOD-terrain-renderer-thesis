@@ -78,7 +78,9 @@ void main() {
     OUT.Latitude = PushConstants.Latitude;
     OUT.LODLevel = PushConstants.LODLevel;
 
+    UNROLL_LOOP
     for(int i = 0; i<CMN_MESHLET_LENGTH ; i++) {
+        UNROLL_LOOP
         for (int j = 0; j < CMN_MESHLET_LENGTH; j++)
         {
             // We set the indexes in accordance with LOD level

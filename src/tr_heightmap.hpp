@@ -45,5 +45,5 @@ public:
     void Deinit();
 
     void Bind(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLayout, int frame);
-    void Draw(VkCommandBuffer commandBuffer);
+    void Draw(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLayout);
 };

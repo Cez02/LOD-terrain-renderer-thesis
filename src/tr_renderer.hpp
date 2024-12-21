@@ -1,7 +1,6 @@
 #pragma once
 
 #include "src/tr_window.hpp"
-#include "src/tr_mesh.hpp"
 #include "src/tr_camera.hpp"
 #include "src/tr_scenedata.hpp"
 

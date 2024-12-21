@@ -211,11 +211,10 @@ uint32_t Heightmap::findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags pr
 }
 
 void Heightmap::Bind(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLayout, int frame) {
-    //    log("\tBind descriptor sets");
-
     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &(m_DescriptorSets.m_DescriptorSets[frame]), 0, nullptr);
+}
 
-//    log("\tBuffer buffer info constants");
+void Heightmap::Draw(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLayout) {
 
     HeightmapPushConstantData data;
     data.HeightmapLength = m_HeightmapLength;
@@ -226,16 +225,12 @@ void Heightmap::Bind(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLay
 
     uint maxTasksEmitted = APP_CONFIG.m_MeshShaderConfig.m_MaxPreferredTaskWorkGroupInvocations;
 
-    // log("Drawing " + std::to_string(maxTasksEmitted) + " meshlets.");
-
     int k =0;
 
     for(int i = 0; i<m_Meshlets.size();) {
         data.BaseMeshletOffset = i;
 
         vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_TASK_BIT_EXT, sizeof(glm::mat4), sizeof(HeightmapPushConstantData), &data);
-
-
 
         uint emittedTasks = maxTasksEmitted;
         if(i + maxTasksEmitted >= m_Meshlets.size()){
@@ -250,14 +245,6 @@ void Heightmap::Bind(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLay
         // if (k == 3)
         //     break;
     }
-}
-
-void Heightmap::Draw(VkCommandBuffer commandBuffer) {
-
-    int factor = m_Meshlets.size() / 5;
-//    for(int i = 0; i<5; i++) {
-//        vkCmdDrawMeshTasksEXT(commandBuffer, factor, 1, 1);
-//    }
 }
 
 void Heightmap::Deinit() {
