@@ -21,8 +21,8 @@ private:
     uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties, VkPhysicalDevice physicalDevice);
 
 public:
-    int *m_Data;
-    std::vector<int> m_DataOrganizedForMeshlets;
+    int16_t *m_Data;
+    std::vector<int16_t> m_DataOrganizedForMeshlets;
     size_t m_HeightmapLength;
     size_t m_DataSize;
     std::vector<MeshletDescription> m_Meshlets;

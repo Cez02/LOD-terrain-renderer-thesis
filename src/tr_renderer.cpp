@@ -285,6 +285,7 @@ bool Renderer::isDeviceSuitable(VkPhysicalDevice device) {
     log("Max vertices out: " + std::to_string(meshShaderProperties.maxMeshOutputVertices));
     log("Max primitives out: " + std::to_string(meshShaderProperties.maxMeshOutputPrimitives));
 
+    log("Supported API version: " + std::to_string(VK_API_VERSION_MAJOR(deviceProperties.properties.apiVersion)) + "." + std::to_string(VK_API_VERSION_MINOR(deviceProperties.properties.apiVersion)));
 
     // log("Max task workgroup size: " + std::to_string(APP_CONFIG.m_MeshShaderConfig.m_MaxTaskWorkgroupSizeTotal));
     // log("Max task workgroup size: " + std::to_string(APP_CONFIG.m_MeshShaderConfig.m_MaxTaskWorkgroupSizeTotal));
@@ -418,6 +419,8 @@ void Renderer::createLogicalDevice()
     meshShaderFeatures.meshShaderQueries = false;
     meshShaderFeatures.multiviewMeshShader = false;
     meshShaderFeatures.primitiveFragmentShadingRateMeshShader = false;
+
+    // features11.storageBuffer16BitAccess = true;
 
     // storageFeatures.storageBuffer16BitAccess = true;
 

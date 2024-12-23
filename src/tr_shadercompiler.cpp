@@ -142,7 +142,7 @@ namespace shaders{
         shaderc::CompileOptions compileOptions;
 
         compileOptions.SetTargetEnvironment(shaderc_target_env::shaderc_target_env_vulkan, shaderc_env_version_vulkan_1_3);
-        compileOptions.SetTargetSpirv(shaderc_spirv_version_1_5);
+        compileOptions.SetTargetSpirv(shaderc_spirv_version_1_6);
         compileOptions.SetIncluder(std::make_unique<NEShaderIncluder>());
 
 #ifdef DEBUG
@@ -163,6 +163,15 @@ namespace shaders{
         size_t newSize = preprocessedSourceCompilationResult.cend() - src;
         content.resize(newSize);
         memcpy(content.data(), src, newSize);
+
+        // log("SPIR-V assembly:");
+        // log(content);
+
+        string sprivPprFilePath = outputDirectory.string() + "/";
+        sprivPprFilePath += filePath.filename().string() + ".ppr";
+        std::ofstream ppr(sprivPprFilePath);
+        ppr << content;
+        ppr.close();
 
 //         log("Preprocessed source:");
 //         log(content);
@@ -193,6 +202,7 @@ namespace shaders{
 
         // Compilation to binary
         shaderc::CompilationResult binaryCompilationResult = compiler.AssembleToSpv(content, compileOptions);
+
 
         if(binaryCompilationResult.GetCompilationStatus() != shaderc_compilation_status_success){
             logError(binaryCompilationResult.GetErrorMessage());

@@ -4,9 +4,11 @@
 
 #extension GL_GOOGLE_include_directive : enable
 
-#extension GL_EXT_shader_explicit_arithmetic_types_int8 : require
-
 #extension GL_EXT_mesh_shader : enable
+
+#extension GL_EXT_shader_16bit_storage : require
+
+#extension GL_EXT_shader_explicit_arithmetic_types_int8 : require
 
 #extension GL_EXT_control_flow_attributes: require
 #define UNROLL_LOOP [[unroll]]
@@ -22,7 +24,7 @@ layout(triangles) out;
 // SSBOs
 
 layout(std430, binding = 0) buffer HeightmapData {
-    int m_Heights[];
+    int16_t m_Heights[];
 } heightmapData;
 
 layout(std140, binding = 1) buffer MeshletDescriptions {
@@ -107,12 +109,13 @@ void processVertex(uvec2 vertexOffset, MeshletDescription meshlet, inout uint ve
     uint heightmapIndex = meshlet.HeightmapDataOffset +  vertexOffset.y * meshlet.Dimensions.x + vertexOffset.x;
 
     vec2 polarOffset = localPolarOffset(meshlet.Offset + vertexOffset + uvec2(0, 0));
-    vec3 vertA = polarToCartesian(IN.Latitude + polarOffset.y, IN.Longitude + polarOffset.x, heightmapData.m_Heights[heightmapIndex]);
+    vec3 vertA = polarToCartesian(IN.Latitude + polarOffset.y, IN.Longitude + polarOffset.x, float(int(heightmapData.m_Heights[heightmapIndex])));
 
     // Interpolants
     OUT[vertexCount].meshletID = gl_WorkGroupID.x;
     OUT[vertexCount].wPos = vertA;
-    OUT[vertexCount].wHeight = float(heightmapData.m_Heights[heightmapIndex]);
+    int height = int(heightmapData.m_Heights[heightmapIndex]);
+    OUT[vertexCount].wHeight = float(height);
 
 
     gl_MeshVerticesEXT[vertexCount].gl_Position = PushConstants.transform_matrix * vec4(vertA, 1.0);

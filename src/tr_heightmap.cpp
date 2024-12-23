@@ -15,7 +15,7 @@
 #include "tr_appconfig.hpp"
 
 static
-void LoadTerrain(std::string path, int **dst, size_t *size, float *latitude, float *longitude) {
+void LoadTerrain(std::string path, int16_t **dst, size_t *size, float *latitude, float *longitude) {
     std::ifstream inputfile(path, std::ios::binary);
 
     std::string hgtName = std::filesystem::path(path).stem();
@@ -35,7 +35,7 @@ void LoadTerrain(std::string path, int **dst, size_t *size, float *latitude, flo
             (std::istreambuf_iterator<char>(inputfile)),
             (std::istreambuf_iterator<char>()));
 
-    *dst = new int[bytes.size() / 2];
+    *dst = new int16_t[bytes.size() / 2];
     *size = bytes.size();
 
     int i = 0;
@@ -43,7 +43,7 @@ void LoadTerrain(std::string path, int **dst, size_t *size, float *latitude, flo
         uint8_t x = bytes[i],
                 y = bytes[i + 1];
 
-        int val = ((int16_t) ((((uint16_t) x << 8)) | (((uint16_t) y))));
+        int16_t val = ((int16_t) ((((uint16_t) x << 8)) | (((uint16_t) y))));
 
         if (val < -10)
             val = -10;
@@ -138,7 +138,7 @@ void Heightmap::Init(VkDevice device, VkPhysicalDevice physicalDevice) {
     // Heightmap data buffer creation and allocation
 
     m_Device = device;
-    VkDeviceSize size = m_DataOrganizedForMeshlets.size() * sizeof(int);
+    VkDeviceSize size = m_DataOrganizedForMeshlets.size() * sizeof(int16_t);
     VkMemoryPropertyFlags properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
 
     VkBufferCreateInfo bufferInfo { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
@@ -165,7 +165,7 @@ void Heightmap::Init(VkDevice device, VkPhysicalDevice physicalDevice) {
 
     void *data;
     vkMapMemory(device, m_HeightmapDataBufferMemory, 0, size, 0, &data);
-    memcpy(data, m_DataOrganizedForMeshlets.data(), m_DataOrganizedForMeshlets.size() * sizeof(int));
+    memcpy(data, m_DataOrganizedForMeshlets.data(), m_DataOrganizedForMeshlets.size() * sizeof(int16_t));
     vkUnmapMemory(device, m_HeightmapDataBufferMemory);
 
 

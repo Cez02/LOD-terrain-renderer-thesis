@@ -9,33 +9,9 @@ find_package(glfw3 REQUIRED)
 find_package(Vulkan REQUIRED COMPONENTS shaderc_combined SPIRV-Tools glslang glslangValidator)
 find_package(glm REQUIRED)
 
-find_library(SHADERC_LIB                NAMES "shaderc"                     HINTS ${LIB_SPIRV_RELEASE_PATH})
-find_library(SHADERC_LIB_D              NAMES "shaderc"                     HINTS ${LIB_SPIRV_DEBUG_PATH})
-
-find_library(GLSLANG_LIB                NAMES "glslang"                     HINTS ${LIB_SPIRV_RELEASE_PATH})
-find_library(GLSLANG_LIB_D              NAMES "glslang" "glslangd"          HINTS ${LIB_SPIRV_DEBUG_PATH})
-
-find_library(SPIRV_LIB                  NAMES "SPIRV"                       HINTS ${LIB_SPIRV_RELEASE_PATH})
-find_library(SPIRV_LIB_D                NAMES "SPIRV" "SPIRVd"              HINTS ${LIB_SPIRV_DEBUG_PATH})
-
-find_library(GLSLANG_OSDEPENDENT_LIB    NAMES "OSDependent"                 HINTS ${LIB_SPIRV_RELEASE_PATH})
-find_library(GLSLANG_OSDEPENDENT_LIB_D  NAMES "OSDependent" "OSDependentd"  HINTS ${LIB_SPIRV_DEBUG_PATH})
-
-find_library(SPIRV_TOOLS_LIB            NAMES "SPIRV-Tools"                 HINTS ${LIB_SPIRV_RELEASE_PATH})
-find_library(SPIRV_TOOLS_LIB_D          NAMES "SPIRV-Tools"                 HINTS ${LIB_SPIRV_DEBUG_PATH})
-
-find_library(SPIRV_TOOLS_OPT_LIB        NAMES "SPIRV-Tools-opt"             HINTS ${LIB_SPIRV_RELEASE_PATH})
-find_library(SPIRV_TOOLS_OPT_LIB_D      NAMES "SPIRV-Tools-opt"             HINTS ${LIB_SPIRV_DEBUG_PATH})
-
 set(SHADERC_LIBS
-        ${SHADERC_LIB}
-        ${SPIRV_LIB}
-        ${GLSLANG_LIB}
-        ${GLSLANG_OSDEPENDENT_LIB}
-        ${SPIRV_TOOLS_OPT_LIB}
-        ${SPIRV_TOOLS_LIB}
+        shaderc_combined
 )
-
 
 include(shaders/CMakeLists.txt)
 
