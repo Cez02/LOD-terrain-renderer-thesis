@@ -28,7 +28,7 @@ public:
         uint32_t m_MeshletLength;
     } m_MeshletInfo;
 
-    uint32_t m_LODLevel = 4;
+    uint32_t m_LODLevel = 1;
 
     void print();
 };

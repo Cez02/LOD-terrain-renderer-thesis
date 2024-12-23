@@ -6,6 +6,7 @@
 
 #extension GL_EXT_shader_explicit_arithmetic_types_int8 : require
 
+
 #extension GL_EXT_mesh_shader : require
 
 #extension GL_EXT_control_flow_attributes: require
@@ -14,14 +15,15 @@
 
 #include "common.h"
 
-layout (local_size_x=CMN_MAX_PREFERRED_TASK_WORK_GROUP_INVOCATIONS) in;
+layout (local_size_x=MAX_PREFERRED_TASK_WORK_GROUP_INVOCATIONS) in;
 
 
 // Push constants
 
 layout( push_constant ) uniform constants
 {
-    layout (offset = 64) uint HeightmapLength;
+    layout (offset = 64) uint MeshletCount;
+    uint HeightmapLength;
     uint BaseMeshletOffset;
     float Longitude;
     float Latitude;
@@ -33,7 +35,7 @@ layout( push_constant ) uniform constants
 // SSBOs
 
 layout(std430, binding = 0) buffer HeightmapData {
-    float m_Heights[];
+    int m_Heights[];
 } heightmapData;
 
 layout(std140, binding = 1) buffer MeshletDescriptions {
@@ -49,13 +51,11 @@ uint laneID = gl_LocalInvocationID.x;
 
 // Task payload
 
-#define MAX_MESHLET_SIZE CMN_MAX_MESH_OUTPUT_VERTICES
+#define TASK_ITERATIONS MAX_PREFERRED_MESH_WORK_GROUP_INVOCATIONS
 
 struct Task {
-    uint    meshletID;
-
-    uvec2   baseOffset;
-    u8vec2  deltas[MAX_MESHLET_SIZE];
+    uint   baseMeshletIDOffset;
+    uint   meshletIDLocalOffset[MAX_PREFERRED_MESH_WORK_GROUP_INVOCATIONS];
     uint    heightmap_length;
 
     float Longitude;
@@ -69,25 +69,20 @@ taskPayloadSharedEXT Task OUT;
 // Utils
 
 void main() {
-    OUT.meshletID = PushConstants.BaseMeshletOffset + baseID;
-
-    OUT.baseOffset = meshletDescriptions.descriptions[OUT.meshletID].Offset;
-
+    OUT.baseMeshletIDOffset = PushConstants.BaseMeshletOffset + baseID * MAX_PREFERRED_MESH_WORK_GROUP_INVOCATIONS;
     OUT.heightmap_length = PushConstants.HeightmapLength;
     OUT.Longitude = PushConstants.Longitude;
     OUT.Latitude = PushConstants.Latitude;
     OUT.LODLevel = PushConstants.LODLevel;
 
     UNROLL_LOOP
-    for(int i = 0; i<CMN_MESHLET_LENGTH ; i++) {
-        UNROLL_LOOP
-        for (int j = 0; j < CMN_MESHLET_LENGTH; j++)
-        {
-            // We set the indexes in accordance with LOD level
-            OUT.deltas[i * CMN_MESHLET_LENGTH + j] = u8vec2( min(j * PushConstants.LODLevel, CMN_MESHLET_LENGTH + 1) , min(i * PushConstants.LODLevel, CMN_MESHLET_LENGTH + 1));
-        }
+    for(int i = 0; i<TASK_ITERATIONS ; i++) {
+        // We set the indexes in accordance with LOD level
+        OUT.meshletIDLocalOffset[i] = i;
     }
 
+
+    uint meshShadersToEmitt = min(TASK_ITERATIONS, PushConstants.MeshletCount - OUT.baseMeshletIDOffset);
     // We only emit as many mesh shaders as we need
-    EmitMeshTasksEXT(meshletDescriptions.descriptions[OUT.meshletID].Dimensions.x * meshletDescriptions.descriptions[OUT.meshletID].Dimensions.y, 1, 1);
+    EmitMeshTasksEXT(meshShadersToEmitt, 1, 1);
 }

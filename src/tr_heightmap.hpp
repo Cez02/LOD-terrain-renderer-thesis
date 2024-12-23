@@ -7,6 +7,7 @@
 #include "shaders/common.h"
 
 struct HeightmapPushConstantData {
+    uint MeshletCount;
     uint HeightmapLength;
     uint BaseMeshletOffset;
     float Longitude;
@@ -20,8 +21,8 @@ private:
     uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties, VkPhysicalDevice physicalDevice);
 
 public:
-    float *m_Data;
-    std::vector<float> m_DataOrganizedForMeshlets;
+    int *m_Data;
+    std::vector<int> m_DataOrganizedForMeshlets;
     size_t m_HeightmapLength;
     size_t m_DataSize;
     std::vector<MeshletDescription> m_Meshlets;

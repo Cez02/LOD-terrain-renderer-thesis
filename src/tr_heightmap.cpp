@@ -9,12 +9,13 @@
 
 #include <fstream>
 #include <filesystem>
+#include <glm/gtx/string_cast.hpp>
 
 #include "tr_logger.hpp"
 #include "tr_appconfig.hpp"
 
 static
-void LoadTerrain(std::string path, float **dst, size_t *size, float *latitude, float *longitude) {
+void LoadTerrain(std::string path, int **dst, size_t *size, float *latitude, float *longitude) {
     std::ifstream inputfile(path, std::ios::binary);
 
     std::string hgtName = std::filesystem::path(path).stem();
@@ -34,7 +35,7 @@ void LoadTerrain(std::string path, float **dst, size_t *size, float *latitude, f
             (std::istreambuf_iterator<char>(inputfile)),
             (std::istreambuf_iterator<char>()));
 
-    *dst = new float[bytes.size() / 2];
+    *dst = new int[bytes.size() / 2];
     *size = bytes.size();
 
     int i = 0;
@@ -42,7 +43,7 @@ void LoadTerrain(std::string path, float **dst, size_t *size, float *latitude, f
         uint8_t x = bytes[i],
                 y = bytes[i + 1];
 
-        float val = ((int16_t) ((((uint16_t) x << 8)) | (((uint16_t) y))));
+        int val = ((int16_t) ((((uint16_t) x << 8)) | (((uint16_t) y))));
 
         if (val < -10)
             val = -10;
@@ -80,8 +81,10 @@ void Heightmap::Init(VkDevice device, VkPhysicalDevice physicalDevice) {
     int sizePerLine = 0;
     uint organizedDataOffset = 0;
 
+
     int maxMeshletSize = APP_CONFIG.m_MeshletInfo.m_MeshletLength;
-    for(int y = 0; y<lengthOfHeightmap - 1; y += maxMeshletSize) {
+
+    for(int y = 0; y<lengthOfHeightmap - 1; y += maxMeshletSize - 1) {
         int dataPointer = 0;
         sizePerLine = 0;
 
@@ -93,14 +96,16 @@ void Heightmap::Init(VkDevice device, VkPhysicalDevice physicalDevice) {
 
             description.Offset = uvec2(x, y);
 
-            if (x + maxMeshletSize > lengthOfHeightmap - 1) {
+            if (x + maxMeshletSize > lengthOfHeightmap) {
                 description.Dimensions.x = lengthOfHeightmap - x;
+                break;
             } else {
                 description.Dimensions.x = maxMeshletSize;
             }
 
-            if (y + maxMeshletSize > lengthOfHeightmap - 1) {
+            if (y + maxMeshletSize > lengthOfHeightmap) {
                 description.Dimensions.y = lengthOfHeightmap - y;
+                break;
             } else {
                 description.Dimensions.y = maxMeshletSize;
             }
@@ -109,15 +114,17 @@ void Heightmap::Init(VkDevice device, VkPhysicalDevice physicalDevice) {
 
             description.HeightmapDataOffset = organizedDataOffset;
 
-            for(int dy = 0; dy < description.Dimensions.y + 1; dy++){
-                for(int dx = 0; dx < description.Dimensions.x + 1; dx++){
+            for(int dy = 0; dy < description.Dimensions.y; dy++){
+                for(int dx = 0; dx < description.Dimensions.x; dx++){
                     m_DataOrganizedForMeshlets.push_back(m_Data[x + dx + (dy + y) * m_HeightmapLength]);
                 }
             }
 
-            x += description.Dimensions.x;
+            // log("Built meshlet starting at " + glm::to_string(description.Offset) + " with dimensions of " + glm::to_string(description.Dimensions));
 
-            organizedDataOffset += (description.Dimensions.x + 1) * (description.Dimensions.y + 1);
+            x += description.Dimensions.x - 1;
+
+            organizedDataOffset += (description.Dimensions.x) * (description.Dimensions.y);
 
             sizePerLine ++;
             m_Meshlets.push_back(description);
@@ -131,7 +138,7 @@ void Heightmap::Init(VkDevice device, VkPhysicalDevice physicalDevice) {
     // Heightmap data buffer creation and allocation
 
     m_Device = device;
-    VkDeviceSize size = m_DataOrganizedForMeshlets.size() * sizeof(float);
+    VkDeviceSize size = m_DataOrganizedForMeshlets.size() * sizeof(int);
     VkMemoryPropertyFlags properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
 
     VkBufferCreateInfo bufferInfo { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
@@ -158,7 +165,7 @@ void Heightmap::Init(VkDevice device, VkPhysicalDevice physicalDevice) {
 
     void *data;
     vkMapMemory(device, m_HeightmapDataBufferMemory, 0, size, 0, &data);
-    memcpy(data, m_DataOrganizedForMeshlets.data(), m_DataOrganizedForMeshlets.size() * sizeof(float));
+    memcpy(data, m_DataOrganizedForMeshlets.data(), m_DataOrganizedForMeshlets.size() * sizeof(int));
     vkUnmapMemory(device, m_HeightmapDataBufferMemory);
 
 
@@ -217,32 +224,32 @@ void Heightmap::Bind(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLay
 void Heightmap::Draw(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLayout) {
 
     HeightmapPushConstantData data;
+    data.MeshletCount = m_Meshlets.size();
     data.HeightmapLength = m_HeightmapLength;
     data.Latitude = m_Latitude;
     data.Longitude = m_Longitude;
     data.BaseMeshletOffset = 0;
     data.LODLevel = APP_CONFIG.m_LODLevel;
-
     uint maxTasksEmitted = APP_CONFIG.m_MeshShaderConfig.m_MaxPreferredTaskWorkGroupInvocations;
 
     int k =0;
+
+    // vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_TASK_BIT_EXT, sizeof(glm::mat4), sizeof(HeightmapPushConstantData), &data);
+    // vkCmdDrawMeshTasksEXT(commandBuffer, m_Meshlets.size() / (maxTasksEmitted), 1, 1);
 
     for(int i = 0; i<m_Meshlets.size();) {
         data.BaseMeshletOffset = i;
 
         vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_TASK_BIT_EXT, sizeof(glm::mat4), sizeof(HeightmapPushConstantData), &data);
 
-        uint emittedTasks = maxTasksEmitted;
-        if(i + maxTasksEmitted >= m_Meshlets.size()){
-            emittedTasks = m_Meshlets.size() - i;
-        }
+        uint meshletsDrawn = maxTasksEmitted * APP_CONFIG.m_MeshShaderConfig.m_MaxPreferredMeshWorkGroupInvocations;
 
-        vkCmdDrawMeshTasksEXT(commandBuffer, emittedTasks, 1, 1);
+        vkCmdDrawMeshTasksEXT(commandBuffer, maxTasksEmitted, 1, 1);
 
-        i += emittedTasks;
+        i += meshletsDrawn ;
         k++;
 
-        // if (k == 3)
+        // if (k ==1)
         //     break;
     }
 }

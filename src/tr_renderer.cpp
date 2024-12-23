@@ -70,7 +70,7 @@ VkPresentModeKHR Renderer::chooseSwapPresentMode(const std::vector<VkPresentMode
         }
     }
 
-    return VK_PRESENT_MODE_FIFO_KHR;
+    return VK_PRESENT_MODE_IMMEDIATE_KHR;
 }
 
 VkExtent2D Renderer::chooseSwapExtent(const VkSurfaceCapabilitiesKHR &capabilities)
@@ -260,17 +260,17 @@ bool Renderer::isDeviceSuitable(VkPhysicalDevice device) {
     // mesh shader props
     // APP_CONFIG.m_MeshShaderConfig.m_MaxPreferredMeshWorkGroupInvocations = meshShaderProperties.maxPreferredMeshWorkGroupInvocations;
     // APP_CONFIG.m_MeshShaderConfig.m_MaxPreferredTaskWorkGroupInvocations = meshShaderProperties.maxPreferredTaskWorkGroupInvocations;
-    APP_CONFIG.m_MeshShaderConfig.m_MaxPreferredMeshWorkGroupInvocations = 64;
-    APP_CONFIG.m_MeshShaderConfig.m_MaxPreferredTaskWorkGroupInvocations = 64;
+    APP_CONFIG.m_MeshShaderConfig.m_MaxPreferredMeshWorkGroupInvocations = 32;
+    APP_CONFIG.m_MeshShaderConfig.m_MaxPreferredTaskWorkGroupInvocations = 32;
 
-    // APP_CONFIG.m_MeshShaderConfig.m_MaxMeshOutputPrimitives = APP_CONFIG.m_MeshShaderConfig.m_MaxPreferredMeshWorkGroupInvocations;
-    // APP_CONFIG.m_MeshShaderConfig.m_MaxMeshOutputVertices = APP_CONFIG.m_MeshShaderConfig.m_MaxPreferredMeshWorkGroupInvocations;
-    APP_CONFIG.m_MeshShaderConfig.m_MaxMeshOutputPrimitives = 64;
-    APP_CONFIG.m_MeshShaderConfig.m_MaxMeshOutputVertices = 64;
+    APP_CONFIG.m_MeshShaderConfig.m_MaxMeshOutputPrimitives = meshShaderProperties.maxMeshOutputPrimitives;
+    APP_CONFIG.m_MeshShaderConfig.m_MaxMeshOutputVertices = meshShaderProperties.maxMeshOutputVertices;
+    // APP_CONFIG.m_MeshShaderConfig.m_MaxMeshOutputPrimitives = 64;
+    // APP_CONFIG.m_MeshShaderConfig.m_MaxMeshOutputVertices = 64;
 
     APP_CONFIG.m_MeshShaderConfig.m_MaxTaskWorkgroupCount = meshShaderProperties.maxTaskWorkGroupCount[0];
 
-    APP_CONFIG.m_MeshletInfo.m_MeshletLength = 8; // Fixed length
+    APP_CONFIG.m_MeshletInfo.m_MeshletLength = 12; // Fixed length
 
     APP_CONFIG.m_MeshShaderConfig.m_MaxTaskWorkGroupInvocations = meshShaderProperties.maxTaskWorkGroupInvocations;
 
@@ -278,6 +278,13 @@ bool Renderer::isDeviceSuitable(VkPhysicalDevice device) {
     memcpy(APP_CONFIG.m_MeshShaderConfig.maxTaskWorkGroupSize, meshShaderProperties.maxTaskWorkGroupSize, sizeof(uint32_t) * 3);
 
     APP_CONFIG.m_MeshShaderConfig.m_MaxTaskWorkgroupSizeTotal = meshShaderProperties.maxTaskWorkGroupTotalCount;
+
+    log("Device: " + std::string(deviceProperties.properties.deviceName));
+    log("Max preffered mesh workgroup invocations: " + std::to_string(meshShaderProperties.maxPreferredMeshWorkGroupInvocations));
+    log("Max preffered task workgroup invocations: " + std::to_string(meshShaderProperties.maxPreferredTaskWorkGroupInvocations));
+    log("Max vertices out: " + std::to_string(meshShaderProperties.maxMeshOutputVertices));
+    log("Max primitives out: " + std::to_string(meshShaderProperties.maxMeshOutputPrimitives));
+
 
     // log("Max task workgroup size: " + std::to_string(APP_CONFIG.m_MeshShaderConfig.m_MaxTaskWorkgroupSizeTotal));
     // log("Max task workgroup size: " + std::to_string(APP_CONFIG.m_MeshShaderConfig.m_MaxTaskWorkgroupSizeTotal));
@@ -316,6 +323,7 @@ void Renderer::pickPhysicalDevice()
 
     for (const auto& device : devices) {
         if (isDeviceSuitable(device)) {
+            log("Picked this device!");
             m_PhysicalDevice = device;
             break;
         }
@@ -346,9 +354,9 @@ void Renderer::createLogicalDevice()
         queueCreateInfos.push_back(queueCreateInfo);
     }
 
-    VkPhysicalDeviceFeatures deviceFeatures{};
-
     // Device creations
+    VkPhysicalDeviceFeatures2 deviceFeatures{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2 };
+
 
     VkDeviceCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -356,7 +364,7 @@ void Renderer::createLogicalDevice()
     createInfo.pQueueCreateInfos = queueCreateInfos.data();
     createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());;
 
-    createInfo.pEnabledFeatures = &deviceFeatures;
+    createInfo.pNext = &deviceFeatures;
 
     createInfo.enabledExtensionCount = static_cast<uint32_t>(DEVICE_EXTENSIONS.size());
     createInfo.ppEnabledExtensionNames = DEVICE_EXTENSIONS.data();
@@ -364,17 +372,67 @@ void Renderer::createLogicalDevice()
     if (enableValidationLayers) {
         createInfo.enabledLayerCount = static_cast<uint32_t>(VALIDATION_LAYERS.size());
         createInfo.ppEnabledLayerNames = VALIDATION_LAYERS.data();
-    } else {
+    } else
+    {
         createInfo.enabledLayerCount = 0;
     }
 
+
+    // enable latest vulkan features
+
+
+    VkPhysicalDeviceVulkan11Features features11 = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES };
+
+    deviceFeatures.pNext = &features11;
+
+    VkPhysicalDeviceVulkan12Features features12 = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES };
+
+    features11.pNext = &features12;
+
+    VkPhysicalDeviceVulkan13Features features13 = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES };
+
+    features12.pNext = &features13;
+
+    // Turn on mesh shader features
     VkPhysicalDeviceMeshShaderFeaturesEXT meshShaderFeatures { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT };
     meshShaderFeatures.meshShader = true;
     meshShaderFeatures.taskShader = true;
 
-    createInfo.pNext = &meshShaderFeatures;
+    features13.pNext = &meshShaderFeatures;
+    meshShaderFeatures.pNext = VK_NULL_HANDLE;
 
-    meshShaderFeatures.pNext = nullptr;
+    /*
+    VkPhysicalDevice16BitStorageFeatures storageFeatures { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_16BIT_STORAGE_FEATURES };
+
+    storageFeatures.storageBuffer16BitAccess = true;
+
+    meshShaderFeatures.pNext = &storageFeatures;
+    storageFeatures.pNext = VK_NULL_HANDLE;
+    */
+
+    vkGetPhysicalDeviceFeatures2(m_PhysicalDevice, &deviceFeatures);
+
+
+    // set options
+
+    meshShaderFeatures.meshShaderQueries = false;
+    meshShaderFeatures.multiviewMeshShader = false;
+    meshShaderFeatures.primitiveFragmentShadingRateMeshShader = false;
+
+    // storageFeatures.storageBuffer16BitAccess = true;
+
+    /*
+    if (!features11.uniformAndStorageBuffer16BitAccess)
+        logError("What the fuck?");
+    features11.uniformAndStorageBuffer16BitAccess = true;
+    */
+
+    // if (!storage16bit.storageInputOutput16)
+    // {
+    //     logError("16bit storage is not supported!");
+    // }
+
+
 
     log("\tCreating device");
 

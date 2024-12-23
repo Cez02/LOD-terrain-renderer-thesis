@@ -1,24 +1,12 @@
 #ifndef LOD_TERRAIN_RENDERING_THESIS_PROJECT_COMMON_H
 #define LOD_TERRAIN_RENDERING_THESIS_PROJECT_COMMON_H
 
-/*
- *
-        uint32_t m_MaxMeshOutputVertices;
-        uint32_t m_MaxMeshOutputPrimitives;
-        uint32_t m_MaxPreferredTaskWorkGroupInvocations;
-        uint32_t m_MaxPreferredMeshWorkGroupInvocations;
-
- */
-
 #define UNSET 1
 
-#define CMN_MAX_PREFERRED_MESH_WORK_GROUP_INVOCATIONS 64
-#define CMN_MAX_PREFERRED_TASK_WORK_GROUP_INVOCATIONS 64
-#define CMN_MAX_MESH_OUTPUT_VERTICES 64
-#define CMN_MAX_MESH_OUTPUT_PRIMITIVES 64
-
-#define CMN_MAX_TASK_WORKGROUP_SIZE 128
-#define CMN_MAX_MESH_WORKGROUP_SIZE 128
+#define MAX_PREFERRED_MESH_WORK_GROUP_INVOCATIONS 32
+#define MAX_PREFERRED_TASK_WORK_GROUP_INVOCATIONS 32
+#define MAX_MESH_OUTPUT_VERTICES 256
+#define MAX_MESH_OUTPUT_PRIMITIVES 256
 
 
 #ifdef __cplusplus
@@ -27,8 +15,7 @@
 using namespace glm;
 #endif
 
-#define CMN_MESHLET_LENGTH 8
-
+#define MESHLET_LENGTH 12
 
 struct
 #ifdef __cplusplus

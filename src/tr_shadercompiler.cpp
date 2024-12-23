@@ -43,23 +43,13 @@ namespace shaders{
 
         inputfile.close();
 
-        /*
-         *
-         #define CMN_MAX_PREFERRED_MESH_WORK_GROUP_INVOCATIONS $m_MaxPreferredMeshWorkGroupInvocations
-#define CMN_MAX_MESH_OUTPUT_VERTICES $m_MaxMeshOutputVertices
-#define CMN_MAX_MESH_OUTPUT_PRIMITIVES $m_MaxMeshOutputPrimitives
 
-         */
         // Replace define values with appropriate from appconfig
-
         replace(content, "$m_MaxPreferredMeshWorkGroupInvocations", to_string(APP_CONFIG.m_MeshShaderConfig.m_MaxPreferredMeshWorkGroupInvocations));
         replace(content, "$m_MaxPreferredTaskWorkGroupInvocations", to_string(APP_CONFIG.m_MeshShaderConfig.m_MaxPreferredTaskWorkGroupInvocations));
         replace(content, "$m_MaxMeshOutputVertices", to_string(APP_CONFIG.m_MeshShaderConfig.m_MaxMeshOutputVertices));
         replace(content, "$m_MaxMeshOutputPrimitives", to_string(APP_CONFIG.m_MeshShaderConfig.m_MaxMeshOutputPrimitives));
         replace(content, "$meshletLength", to_string(APP_CONFIG.m_MeshletInfo.m_MeshletLength));
-
-        replace(content, "$m_MaxTaskWorkgroupSize", to_string(APP_CONFIG.m_MeshShaderConfig.maxTaskWorkGroupSize[0]));
-        replace(content, "$m_MaxMeshWorkgroupSize", to_string(APP_CONFIG.m_MeshShaderConfig.maxMeshWorkGroupSize[0]));
 
         // write content back to header
         commonHeader = SHADER_SOURCES_DIRECTORY;
@@ -69,7 +59,6 @@ namespace shaders{
         fs << content;
         fs.flush();
         fs.close();
-
     }
 
     class NEShaderIncluder : public shaderc::CompileOptions::IncluderInterface
