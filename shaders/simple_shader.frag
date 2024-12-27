@@ -2,6 +2,7 @@
 
 #extension GL_GOOGLE_include_directive : enable
 
+
 // Allows us to use float16_t for arithmetic purposes.
 #extension GL_EXT_shader_explicit_arithmetic_types_float16 : require
 

@@ -98,14 +98,12 @@ void Heightmap::Init(VkDevice device, VkPhysicalDevice physicalDevice) {
 
             if (x + maxMeshletSize > lengthOfHeightmap) {
                 description.Dimensions.x = lengthOfHeightmap - x;
-                break;
             } else {
                 description.Dimensions.x = maxMeshletSize;
             }
 
             if (y + maxMeshletSize > lengthOfHeightmap) {
                 description.Dimensions.y = lengthOfHeightmap - y;
-                break;
             } else {
                 description.Dimensions.y = maxMeshletSize;
             }
@@ -127,7 +125,12 @@ void Heightmap::Init(VkDevice device, VkPhysicalDevice physicalDevice) {
             organizedDataOffset += (description.Dimensions.x) * (description.Dimensions.y);
 
             sizePerLine ++;
+
+#ifdef ENCODED_MESHLETS
+            m_Meshlets.push_back(encodeMeshlet(description, APP_CONFIG.m_MeshletInfo.m_MeshletLength));
+#else
             m_Meshlets.push_back(description);
+#endif
         }
 
 //        log("Size per line: " + std::to_string(sizePerLine));
@@ -173,7 +176,11 @@ void Heightmap::Init(VkDevice device, VkPhysicalDevice physicalDevice) {
     // Meshlet description buffer creation and allocation
 
     m_Device = device;
+#ifdef ENCODED_MESHLETS
+    size = m_Meshlets.size() * sizeof(EncodedMeshletDescription);
+#else
     size = m_Meshlets.size() * sizeof(MeshletDescription);
+#endif
 
     VkBufferCreateInfo meshletDescriptionBufferInfo { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
     meshletDescriptionBufferInfo.size = size;
@@ -199,7 +206,15 @@ void Heightmap::Init(VkDevice device, VkPhysicalDevice physicalDevice) {
 
     data = nullptr;
     vkMapMemory(device, m_MeshletDescriptionBufferMemory, 0, size, 0, &data);
-    memcpy(data, m_Meshlets.data(), m_Meshlets.size() * sizeof(MeshletDescription));
+    memcpy(data, m_Meshlets.data(), m_Meshlets.size() *
+#ifdef ENCODED_MESHLETS
+            sizeof(EncodedMeshletDescription));
+#else
+            sizeof(MeshletDescription));
+#endif
+
+
+
     vkUnmapMemory(device, m_MeshletDescriptionBufferMemory);
 }
 
@@ -249,7 +264,7 @@ void Heightmap::Draw(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLay
         i += meshletsDrawn ;
         k++;
 
-        // if (k ==1)
+        // if (k ==2)
         //     break;
     }
 }

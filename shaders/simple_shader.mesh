@@ -8,7 +8,8 @@
 
 #extension GL_EXT_shader_16bit_storage : require
 
-#extension GL_EXT_shader_explicit_arithmetic_types_int8 : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int8  : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
 
 #extension GL_EXT_control_flow_attributes: require
 #define UNROLL_LOOP [[unroll]]
@@ -27,10 +28,19 @@ layout(std430, binding = 0) buffer HeightmapData {
     int16_t m_Heights[];
 } heightmapData;
 
-layout(std140, binding = 1) buffer MeshletDescriptions {
-    MeshletDescription descriptions[];
-} meshletDescriptions;
+#ifdef ENCODED_MESHLETS
 
+    layout(std430, binding = 1) buffer MeshletDescriptions {
+        EncodedMeshletDescription descriptions[];
+    } meshletDescriptions;
+
+#else
+
+    layout(std140, binding = 1) buffer MeshletDescriptions {
+        MeshletDescription descriptions[];
+    } meshletDescriptions;
+
+#endif
 
 
 // Push constants
@@ -98,7 +108,7 @@ vec3 polarToCartesian(float lat, float lon, float height){
 }
 
 vec2 localPolarOffset(uvec2 offset){
-    return (offset * PI ) / (180 * 1201);
+    return (offset * PI ) / (180 * 1200);
 }
 
 void processVertex(uvec2 vertexOffset, MeshletDescription meshlet, inout uint vertexCount){
@@ -119,6 +129,8 @@ void processVertex(uvec2 vertexOffset, MeshletDescription meshlet, inout uint ve
 
 
     gl_MeshVerticesEXT[vertexCount].gl_Position = PushConstants.transform_matrix * vec4(vertA, 1.0);
+    //gl_MeshVerticesEXT[vertexCount].gl_Position = vec4(0, 0, 0, 0);
+
 
     vertexCount++;
 }
@@ -136,9 +148,9 @@ void createQuad(uvec2 quadOffset, MeshletDescription meshlet, inout uint primiti
     uint vertCIndex =  quadOffset.x                 + (quadOffset.y + IN.LODLevel)  * meshlet.Dimensions.x;
     uint vertDIndex = (quadOffset.x + IN.LODLevel)  + (quadOffset.y + IN.LODLevel)  * meshlet.Dimensions.x;
 
+
     gl_PrimitiveTriangleIndicesEXT[primitiveCount + 0] = uvec3(vertBIndex, vertAIndex, vertCIndex);
     gl_PrimitiveTriangleIndicesEXT[primitiveCount + 1] = uvec3(vertCIndex, vertDIndex, vertBIndex);
-
 
     gl_MeshPrimitivesEXT[primitiveCount + 0].gl_PrimitiveID = int(gl_WorkGroupID.x);
     gl_MeshPrimitivesEXT[primitiveCount + 1].gl_PrimitiveID = int(gl_WorkGroupID.x);
@@ -146,24 +158,40 @@ void createQuad(uvec2 quadOffset, MeshletDescription meshlet, inout uint primiti
     primitiveCount += 2;
 }
 
-void getMeshlet(inout MeshletDescription meshletDescription){
-    meshletDescription.Offset = meshletDescriptions.descriptions[IN.baseMeshletIDOffset + IN.meshletIDLocalOffset[gl_WorkGroupID.x]].Offset;
-    meshletDescription.Dimensions = meshletDescriptions.descriptions[IN.baseMeshletIDOffset + IN.meshletIDLocalOffset[gl_WorkGroupID.x]].Dimensions;
-    meshletDescription.HeightmapDataOffset = meshletDescriptions.descriptions[IN.baseMeshletIDOffset + IN.meshletIDLocalOffset[gl_WorkGroupID.x]].HeightmapDataOffset;
-}
-
 void main() {
+
+/*
+    gl_PrimitiveTriangleIndicesEXT[0] = uvec3(0, 1, 2);
+    gl_MeshVerticesEXT[0].gl_Position = vec4(0, 0, 0, 0);
+    gl_MeshVerticesEXT[1].gl_Position = vec4(0, 1, 0, 0);
+    gl_MeshVerticesEXT[2].gl_Position = vec4(0, 0, 1, 0);
+
+    MeshletDescription thisMeshlet;
+
+    decodeMeshlet(meshletDescriptions.descriptions[IN.baseMeshletIDOffset + IN.meshletIDLocalOffset[gl_WorkGroupID.x]], thisMeshlet);
+
+    OUT[0].MeshletOffset = thisMeshlet.Offset;
+    OUT[0].MeshletDimensions = thisMeshlet.Dimensions;
+
+
+    SetMeshOutputsEXT(3, 1);
+
+    return;
+*/
 
     // Get meshlet data
 
     MeshletDescription thisMeshlet;
 
-    getMeshlet(thisMeshlet);
+#if ENCODED_MESHLETS
+    decodeMeshlet(meshletDescriptions.descriptions[IN.baseMeshletIDOffset + IN.meshletIDLocalOffset[gl_WorkGroupID.x]], thisMeshlet);
+#else
+    thisMeshlet = meshletDescriptions.descriptions[IN.baseMeshletIDOffset + IN.meshletIDLocalOffset[gl_WorkGroupID.x]];
+#endif
 
     uint vertCount = 0;
     uint primCount = 0;
 
-    // generate vertices
     for(uint quadID = 0; quadID < (MESHLET_LENGTH)*(MESHLET_LENGTH); quadID++){
 
         uvec2 coord = uvec2(quadID % (MESHLET_LENGTH), quadID / (MESHLET_LENGTH));

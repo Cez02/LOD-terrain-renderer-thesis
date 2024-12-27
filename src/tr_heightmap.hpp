@@ -25,7 +25,12 @@ public:
     std::vector<int16_t> m_DataOrganizedForMeshlets;
     size_t m_HeightmapLength;
     size_t m_DataSize;
+#ifdef ENCODED_MESHLETS
+    std::vector<EncodedMeshletDescription> m_Meshlets;
+#else
     std::vector<MeshletDescription> m_Meshlets;
+#endif
+
 
     std::string m_DataPath;
     float m_Longitude, m_Latitude;

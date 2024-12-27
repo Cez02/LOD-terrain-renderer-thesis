@@ -928,7 +928,12 @@ void Renderer::createGraphicsPipeline()
     rasterizer.depthClampEnable = VK_FALSE;
     rasterizer.rasterizerDiscardEnable = VK_FALSE;
 
+#ifdef DRAW_WIREFRAME
+    rasterizer.polygonMode = VK_POLYGON_MODE_LINE;
+#else
     rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
+
+#endif
     rasterizer.lineWidth = 1.0f;
 
     rasterizer.cullMode = VK_CULL_MODE_BACK_BIT; // for now
@@ -1405,7 +1410,12 @@ void Renderer::initVKSceneElements(SceneData &scene) {
             VkDescriptorBufferInfo meshletDescriptionBufferInfo{};
             meshletDescriptionBufferInfo.buffer = heightmap.m_MeshletDescriptionBuffer;
             meshletDescriptionBufferInfo.offset = 0;
-            meshletDescriptionBufferInfo.range = heightmap.m_Meshlets.size() * sizeof(MeshletDescription);
+            meshletDescriptionBufferInfo.range = heightmap.m_Meshlets.size() *
+#ifdef ENCODED_MESHLETS
+            sizeof(EncodedMeshletDescription);
+#else
+            sizeof(MeshletDescription);
+#endif
 
             VkWriteDescriptorSet descriptorMeshletWrite{};
             descriptorMeshletWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;

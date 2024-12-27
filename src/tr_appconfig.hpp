@@ -2,6 +2,10 @@
 
 #include <vulkan/vulkan.hpp>
 
+//#define DRAW_WIREFRAME 1
+
+
+
 class AppConfig{
 public:
     struct MSConfig {

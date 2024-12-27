@@ -6,7 +6,8 @@
 
 #extension GL_EXT_shader_16bit_storage : require
 
-#extension GL_EXT_shader_explicit_arithmetic_types_int8 : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int8  : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
 
 #extension GL_EXT_mesh_shader : require
 
@@ -39,9 +40,19 @@ layout(std430, binding = 0) buffer HeightmapData {
     int16_t m_Heights[];
 } heightmapData;
 
-layout(std140, binding = 1) buffer MeshletDescriptions {
-    MeshletDescription descriptions[];
-} meshletDescriptions;
+#ifdef ENCODED_MESHLETS
+
+    layout(std430, binding = 1) buffer MeshletDescriptions {
+        EncodedMeshletDescription descriptions[];
+    } meshletDescriptions;
+
+#else
+
+    layout(std140, binding = 1) buffer MeshletDescriptions {
+        MeshletDescription descriptions[];
+    } meshletDescriptions;
+
+#endif
 
 
 // Indexing stuff
@@ -82,6 +93,10 @@ void main() {
         OUT.meshletIDLocalOffset[i] = i;
     }
 
+    if(OUT.baseMeshletIDOffset >= PushConstants.MeshletCount){
+        //EmitMeshTasksEXT(0, 1, 1);
+        return;
+    }
 
     uint meshShadersToEmitt = min(TASK_ITERATIONS, PushConstants.MeshletCount - OUT.baseMeshletIDOffset);
     // We only emit as many mesh shaders as we need
