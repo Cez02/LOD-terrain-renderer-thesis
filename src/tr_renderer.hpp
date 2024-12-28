@@ -7,6 +7,9 @@
 #include <string>
 #include <vector>
 #include <optional>
+#include <functional>
+
+#include "tr_guihandler.h"
 
 struct QueueFamilyIndices {
     std::optional<uint32_t> graphicsFamily;
@@ -23,9 +26,20 @@ struct SwapChainSupportDetails {
     std::vector<VkPresentModeKHR> presentModes;
 };
 
+struct UploadContext {
+    VkFence _uploadFence;
+    VkCommandPool _commandPool;
+    VkCommandBuffer _commandBuffer;
+};
+
+struct RenderStatistics
+{
+    uint64_t PrimitiveCount;
+};
+
 
 class Renderer {
-private:
+public:
     const int MAX_FRAMES_IN_FLIGHT = 2;
 
     static std::vector<char> readFile(const std::string &filepath);
@@ -61,6 +75,8 @@ private:
     VkPipelineLayout m_PipelineLayout;
     VkPipeline m_GraphicsPipeline;
 
+    VkQueryPool m_QueryPool;
+
     VkCommandPool m_CommandPool;
     std::vector<VkCommandBuffer> m_CommandBuffers;
 
@@ -68,13 +84,21 @@ private:
     std::vector<VkSemaphore> m_RenderFinishedSemaphores;
     std::vector<VkFence> m_InFlightFences;
 
+    UploadContext m_UploadContext;
+
+    std::vector<VkBuffer> m_RenderStatisticsDataBuffer;
+    std::vector<VkDeviceMemory> m_RenderStaticsDataMemory;
+    std::vector<void*> m_RenderingStatisticsMappedData;
+
+    RenderStatistics m_RenderStatistics;
+
     uint32_t m_CurrentFrame = 0;
 
     Camera m_Camera;
 
     Window *m_AppWindow;
 
-
+    GUIHandler *m_GUIHandler;
 
     const std::vector<const char*> VALIDATION_LAYERS = {
             "VK_LAYER_KHRONOS_validation"
@@ -84,7 +108,9 @@ private:
             VK_KHR_SWAPCHAIN_EXTENSION_NAME,
             VK_EXT_MESH_SHADER_EXTENSION_NAME,
             VK_KHR_STORAGE_BUFFER_STORAGE_CLASS_EXTENSION_NAME,
-            VK_KHR_16BIT_STORAGE_EXTENSION_NAME
+            VK_KHR_16BIT_STORAGE_EXTENSION_NAME,
+            VK_EXT_TRANSFORM_FEEDBACK_EXTENSION_NAME,
+            VK_EXT_PRIMITIVES_GENERATED_QUERY_EXTENSION_NAME
     };
 
 #ifdef NDEBUG
@@ -120,6 +146,10 @@ private:
 
     VkShaderModule createShaderModule(const std::vector<char>& code);
 
+    VkCommandBufferBeginInfo command_buffer_begin_info(VkCommandBufferUsageFlags flags /*= 0*/);
+    VkSubmitInfo submit_info(VkCommandBuffer* cmd);
+    void immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function);
+
     void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex, SceneData &scene);
 
     bool checkValidationLayerSupport();
@@ -144,6 +174,8 @@ private:
 
     void createGraphicsPipeline();
 
+    void createQueryPool();
+
     void createFramebuffers();
 
     void createCommandPool();
@@ -154,15 +186,22 @@ private:
 
     void createSyncObjects();
 
-public:
+    void createRenderStatisticsBuffer();
+
+    void initImgui();
 
     Renderer();
+
+    RenderStatistics getRenderStatistics();
 
     void initVulkan(Window *appWindow);
 
     void initVKSceneElements(SceneData &scene);
 
     void drawFrame(SceneData &scene);
+    void Present();
+
+    void waitAllFences();
 
     void cleanup(SceneData loadedScene);
 

@@ -5,6 +5,10 @@ LIST(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 add_executable(terrain_renderer)
 
+# dependencies
+
+add_subdirectory(third-party)
+
 find_package(glfw3 REQUIRED)
 find_package(Vulkan REQUIRED COMPONENTS shaderc_combined SPIRV-Tools glslang glslangValidator)
 find_package(glm REQUIRED)

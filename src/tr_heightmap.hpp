@@ -7,12 +7,14 @@
 #include "shaders/common.h"
 
 struct HeightmapPushConstantData {
+    glm::vec3 ObservatorPosition;
+    uint padding;
     uint MeshletCount;
     uint HeightmapLength;
     uint BaseMeshletOffset;
     float Longitude;
     float Latitude;
-    uint LODLevel;
+    uint8_t LODLevel;
 };
 
 class Heightmap {
@@ -51,5 +53,5 @@ public:
     void Deinit();
 
     void Bind(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLayout, int frame);
-    void Draw(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLayout);
+    void Draw(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLayout, glm::vec3 observatorPosition);
 };

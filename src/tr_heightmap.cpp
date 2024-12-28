@@ -236,7 +236,7 @@ void Heightmap::Bind(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLay
     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &(m_DescriptorSets.m_DescriptorSets[frame]), 0, nullptr);
 }
 
-void Heightmap::Draw(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLayout) {
+void Heightmap::Draw(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLayout, glm::vec3 observatorPosition) {
 
     HeightmapPushConstantData data;
     data.MeshletCount = m_Meshlets.size();
@@ -245,6 +245,7 @@ void Heightmap::Draw(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLay
     data.Longitude = m_Longitude;
     data.BaseMeshletOffset = 0;
     data.LODLevel = APP_CONFIG.m_LODLevel;
+    data.ObservatorPosition = observatorPosition;
     uint maxTasksEmitted = APP_CONFIG.m_MeshShaderConfig.m_MaxPreferredTaskWorkGroupInvocations;
 
     int k =0;

@@ -23,8 +23,21 @@
 #include <algorithm>
 #include <fstream>
 #include <array>
+#include <imgui.h>
+#include <imgui_impl_glfw.h>
+#include <imgui_impl_vulkan.h>
+#include <glm/gtx/string_cast.hpp>
 
 #include "vk_ext_mesh_shader.h"
+
+static void check_vk_result(VkResult err)
+{
+    if (err == 0)
+        return;
+    fprintf(stderr, "[vulkan] Error: VkResult = %d\n", err);
+    if (err < 0)
+        abort();
+}
 
 SwapChainSupportDetails Renderer::querySwapChainSupport(VkPhysicalDevice device)
 {
@@ -54,7 +67,7 @@ SwapChainSupportDetails Renderer::querySwapChainSupport(VkPhysicalDevice device)
 VkSurfaceFormatKHR Renderer::chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR> &availableFormats)
 {
     for (const auto& availableFormat : availableFormats) {
-        if (availableFormat.format == VK_FORMAT_B8G8R8A8_SRGB && availableFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
+        if (availableFormat.format == VK_FORMAT_B8G8R8A8_UNORM && availableFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
             return availableFormat;
         }
     }
@@ -197,6 +210,63 @@ void Renderer::createInstance()
     }
 }
 
+// implementation
+VkCommandBufferBeginInfo Renderer::command_buffer_begin_info(VkCommandBufferUsageFlags flags /*= 0*/)
+{
+    VkCommandBufferBeginInfo info = {};
+    info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    info.pNext = nullptr;
+
+    info.pInheritanceInfo = nullptr;
+    info.flags = flags;
+    return info;
+}
+
+VkSubmitInfo Renderer::submit_info(VkCommandBuffer* cmd)
+{
+    VkSubmitInfo info = {};
+    info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    info.pNext = nullptr;
+
+    info.waitSemaphoreCount = 0;
+    info.pWaitSemaphores = nullptr;
+    info.pWaitDstStageMask = nullptr;
+    info.commandBufferCount = 1;
+    info.pCommandBuffers = cmd;
+    info.signalSemaphoreCount = 0;
+    info.pSignalSemaphores = nullptr;
+
+    return info;
+}
+
+void Renderer::immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function)
+{
+
+	VkCommandBuffer cmd = m_UploadContext._commandBuffer;
+
+	//begin the command buffer recording. We will use this command buffer exactly once before resetting, so we tell vulkan that
+	VkCommandBufferBeginInfo cmdBeginInfo = command_buffer_begin_info(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
+
+	check_vk_result(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
+
+	//execute the function
+	function(cmd);
+
+	check_vk_result(vkEndCommandBuffer(cmd));
+
+	VkSubmitInfo submit = submit_info(&cmd);
+
+
+	//submit command buffer to the queue and execute it.
+	// _uploadFence will now block until the graphic commands finish execution
+	check_vk_result(vkQueueSubmit(m_GraphicsQueue, 1, &submit, m_UploadContext._uploadFence));
+
+	vkWaitForFences(m_Device, 1, &m_UploadContext._uploadFence, true, 9999999999);
+	vkResetFences(m_Device, 1, &m_UploadContext._uploadFence);
+
+	// reset the command buffers inside the command pool
+	vkResetCommandPool(m_Device, m_UploadContext._commandPool, 0);
+}
 
 QueueFamilyIndices Renderer::findQueueFamilies(VkPhysicalDevice device) {
     QueueFamilyIndices indices;
@@ -270,7 +340,7 @@ bool Renderer::isDeviceSuitable(VkPhysicalDevice device) {
 
     APP_CONFIG.m_MeshShaderConfig.m_MaxTaskWorkgroupCount = meshShaderProperties.maxTaskWorkGroupCount[0];
 
-    APP_CONFIG.m_MeshletInfo.m_MeshletLength = 12; // Fixed length
+    APP_CONFIG.m_MeshletInfo.m_MeshletLength = 9; // Fixed length
 
     APP_CONFIG.m_MeshShaderConfig.m_MaxTaskWorkGroupInvocations = meshShaderProperties.maxTaskWorkGroupInvocations;
 
@@ -400,7 +470,12 @@ void Renderer::createLogicalDevice()
     meshShaderFeatures.taskShader = true;
 
     features13.pNext = &meshShaderFeatures;
-    meshShaderFeatures.pNext = VK_NULL_HANDLE;
+
+    // Turn on primitives generated queries
+    VkPhysicalDevicePrimitivesGeneratedQueryFeaturesEXT primitivesGeneratedQueryFeaturesEXT { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRIMITIVES_GENERATED_QUERY_FEATURES_EXT };
+
+    meshShaderFeatures.pNext = &primitivesGeneratedQueryFeaturesEXT;
+    primitivesGeneratedQueryFeaturesEXT.pNext = VK_NULL_HANDLE;
 
     /*
     VkPhysicalDevice16BitStorageFeatures storageFeatures { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_16BIT_STORAGE_FEATURES };
@@ -416,9 +491,11 @@ void Renderer::createLogicalDevice()
 
     // set options
 
-    meshShaderFeatures.meshShaderQueries = false;
+    meshShaderFeatures.meshShaderQueries = true;
     meshShaderFeatures.multiviewMeshShader = false;
     meshShaderFeatures.primitiveFragmentShadingRateMeshShader = false;
+
+    primitivesGeneratedQueryFeaturesEXT.primitivesGeneratedQuery = true;
 
     // features11.storageBuffer16BitAccess = true;
 
@@ -719,12 +796,17 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
 {
     VkCommandBufferBeginInfo beginInfo{};
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    beginInfo.flags = 0; // Optional
+    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT; // Optional
     beginInfo.pInheritanceInfo = nullptr; // Optional
 
     if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS) {
         throw std::runtime_error("failed to begin recording command buffer!");
     }
+
+    // vkCmdResetQueryPool(m_CommandBuffers[m_CurrentFrame], m_QueryPool, 0, 1);
+    // vkCmdBeginQuery(m_CommandBuffers[m_CurrentFrame], m_QueryPool, 0, 0);
+
+
 
     VkRenderPassBeginInfo renderPassInfo{};
     renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -776,16 +858,29 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
     //upload the matrix to the GPU via push constants
     vkCmdPushConstants(commandBuffer, m_PipelineLayout, VK_SHADER_STAGE_MESH_BIT_EXT, 0, sizeof(glm::mat4), &constants);
 
-
 //    log("Binding and drawing heightmaps...");
     // draw meshes
+    log(glm::to_string(getCamera().m_Position));
     for(auto & heightmap : scene.getHeightmaps()) {
         heightmap.Bind(commandBuffer, m_PipelineLayout, m_CurrentFrame);
-        heightmap.Draw(commandBuffer, m_PipelineLayout);
+        heightmap.Draw(commandBuffer, m_PipelineLayout, getCamera().m_Position);
     }
+
+    ImGui_ImplVulkan_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+
+    m_GUIHandler->DrawGUI();
+
+
+
+    ImGui::Render();
+    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer);
+
 
     vkCmdEndRenderPass(commandBuffer);
 
+    // vkCmdEndQuery(m_CommandBuffers[m_CurrentFrame], m_QueryPool, 0);
 
 //    log("Ending command buffer");
     if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
@@ -808,14 +903,22 @@ void Renderer::createDescriptorSetLayout() {
     meshletDescriptionLayoutBinding.stageFlags = VK_SHADER_STAGE_MESH_BIT_EXT | VK_SHADER_STAGE_TASK_BIT_EXT | VK_SHADER_STAGE_FRAGMENT_BIT;
     meshletDescriptionLayoutBinding.pImmutableSamplers = nullptr;
 
-    VkDescriptorSetLayoutBinding bindings[2] = {
+    VkDescriptorSetLayoutBinding renderingStatisticsLayoutBinding{};
+    renderingStatisticsLayoutBinding.binding = 2;
+    renderingStatisticsLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    renderingStatisticsLayoutBinding.descriptorCount = 1;
+    renderingStatisticsLayoutBinding.stageFlags = VK_SHADER_STAGE_MESH_BIT_EXT | VK_SHADER_STAGE_TASK_BIT_EXT | VK_SHADER_STAGE_FRAGMENT_BIT;
+    renderingStatisticsLayoutBinding.pImmutableSamplers = nullptr;
+
+    VkDescriptorSetLayoutBinding bindings[3] = {
             heightmapDataLayoutBinding,
-            meshletDescriptionLayoutBinding
+            meshletDescriptionLayoutBinding,
+            renderingStatisticsLayoutBinding
     };
 
     VkDescriptorSetLayoutCreateInfo layoutInfo{};
     layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    layoutInfo.bindingCount = 2;
+    layoutInfo.bindingCount = 3;
     layoutInfo.pBindings = bindings;
 
     if (vkCreateDescriptorSetLayout(m_Device, &layoutInfo, nullptr, &m_DescriptorSetLayout) != VK_SUCCESS) {
@@ -826,13 +929,14 @@ void Renderer::createDescriptorSetLayout() {
 void Renderer::createDescriptorPool() {
     VkDescriptorPoolSize poolSize{};
     poolSize.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    poolSize.descriptorCount = 3 * (MAX_FRAMES_IN_FLIGHT + MAX_FRAMES_IN_FLIGHT);
+    poolSize.descriptorCount = 100 * (MAX_FRAMES_IN_FLIGHT) ;
 
     VkDescriptorPoolCreateInfo poolInfo{};
     poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     poolInfo.poolSizeCount = 1;
     poolInfo.pPoolSizes = &poolSize;
-    poolInfo.maxSets = static_cast<uint32_t>(3 * 2 * MAX_FRAMES_IN_FLIGHT);
+    poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+    poolInfo.maxSets = static_cast<uint32_t>(100 * MAX_FRAMES_IN_FLIGHT) ;
 
     if (vkCreateDescriptorPool(m_Device, &poolInfo, nullptr, &m_DescriptorPool) != VK_SUCCESS) {
         throw std::runtime_error("failed to create descriptor pool!");
@@ -932,7 +1036,6 @@ void Renderer::createGraphicsPipeline()
     rasterizer.polygonMode = VK_POLYGON_MODE_LINE;
 #else
     rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
-
 #endif
     rasterizer.lineWidth = 1.0f;
 
@@ -1050,6 +1153,17 @@ void Renderer::createGraphicsPipeline()
     vkDestroyShaderModule(m_Device, fragShaderModule, nullptr);
 }
 
+void Renderer::createQueryPool()
+{
+    VkQueryPoolCreateInfo queryPoolInfo{};
+    queryPoolInfo.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
+    queryPoolInfo.queryType = VK_QUERY_TYPE_PRIMITIVES_GENERATED_EXT;
+    queryPoolInfo.queryCount = 1; // Number of queries
+    // queryPoolInfo.pipelineStatistics = VK_QUERY_PIPELINE_STATISTIC_CLIPPING_PRIMITIVES_BIT;
+
+    vkCreateQueryPool(m_Device, &queryPoolInfo, nullptr, &m_QueryPool);
+}
+
 void Renderer::createFramebuffers()
 {
     m_SwapChainFramebuffers.resize(m_SwapChainImageViews.size());
@@ -1156,11 +1270,76 @@ void Renderer::createSyncObjects()
     for(size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
         if (vkCreateSemaphore(m_Device, &semaphoreInfo, nullptr, &m_ImageAvailableSemaphores[i]) != VK_SUCCESS ||
             vkCreateSemaphore(m_Device, &semaphoreInfo, nullptr, &m_RenderFinishedSemaphores[i]) != VK_SUCCESS ||
-            vkCreateFence(m_Device, &fenceInfo, nullptr, &m_InFlightFences[i]) != VK_SUCCESS) {
+            vkCreateFence(m_Device, &fenceInfo, nullptr, &m_InFlightFences[i]) != VK_SUCCESS )  {
             throw std::runtime_error("failed to create semaphores!");
         }
     }
 
+    fenceInfo.flags = 0;
+
+    if (vkCreateFence(m_Device, &fenceInfo, nullptr, &(m_UploadContext._uploadFence)) != VK_SUCCESS)
+    {
+        throw std::runtime_error("failed to create semaphores!");
+    }
+}
+
+void Renderer::createRenderStatisticsBuffer()
+{
+    m_RenderingStatisticsMappedData.resize(MAX_FRAMES_IN_FLIGHT);
+    m_RenderStaticsDataMemory.resize(MAX_FRAMES_IN_FLIGHT);
+    m_RenderStatisticsDataBuffer.resize(MAX_FRAMES_IN_FLIGHT);
+
+    for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+    {
+        VkDeviceSize size = sizeof(RenderStatistics);
+        VkMemoryPropertyFlags properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+
+        VkBufferCreateInfo bufferInfo { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
+        bufferInfo.size = size;
+        bufferInfo.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+        bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+        if(vkCreateBuffer(m_Device, &bufferInfo, nullptr, &(m_RenderStatisticsDataBuffer[i])) != VK_SUCCESS){
+            throw std::runtime_error("Failed to create render statistics buffer!!!");
+        }
+
+        VkMemoryRequirements memReqs;
+        vkGetBufferMemoryRequirements(m_Device, m_RenderStatisticsDataBuffer[i], &memReqs);
+
+        VkMemoryAllocateInfo allocInfo { VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO };
+        allocInfo.allocationSize = memReqs.size;
+        allocInfo.memoryTypeIndex = findMemoryType(memReqs.memoryTypeBits, properties);
+
+        if (vkAllocateMemory(m_Device, &allocInfo, nullptr, &(m_RenderStaticsDataMemory[i])) != VK_SUCCESS){
+            throw std::runtime_error("Failed to allocate memory for the buffer!!!");
+        }
+
+        vkBindBufferMemory(m_Device, m_RenderStatisticsDataBuffer[i], m_RenderStaticsDataMemory[i], 0);
+
+        vkMapMemory(m_Device, m_RenderStaticsDataMemory[i], 0, sizeof(RenderStatistics), 0, &(m_RenderingStatisticsMappedData[i]));
+    }
+}
+
+void Renderer::initImgui()
+{
+    ImGui::CreateContext();
+    ImGui::GetIO().ConfigFlags = ImGuiConfigFlags_NavEnableKeyboard;
+
+    ImGui_ImplGlfw_InitForVulkan(m_AppWindow->getGLFWWindow(), true);
+
+    ImGui_ImplVulkan_InitInfo initInfo{};
+    initInfo.Instance = m_Instance;
+    initInfo.DescriptorPool = m_DescriptorPool;
+    initInfo.RenderPass = m_RenderPass;
+    initInfo.Device = m_Device;
+    initInfo.PhysicalDevice = m_PhysicalDevice;
+    initInfo.ImageCount = MAX_FRAMES_IN_FLIGHT;
+    initInfo.Queue = m_GraphicsQueue;
+    initInfo.MinImageCount = MAX_FRAMES_IN_FLIGHT;
+    initInfo.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
+    ImGui_ImplVulkan_Init(&initInfo);
+
+    ImGui_ImplVulkan_CreateFontsTexture();
 }
 
 void Renderer::initVulkan(Window *appWindow)
@@ -1200,6 +1379,9 @@ void Renderer::initVulkan(Window *appWindow)
     log("Creating graphics pipeline");
     createGraphicsPipeline();
 
+    log("Creating query pool");
+    createQueryPool();
+
     log("Creating command pool");
     createCommandPool();
 
@@ -1215,29 +1397,49 @@ void Renderer::initVulkan(Window *appWindow)
     log("Creating sync objects");
     createSyncObjects();
 
+    log("Creating render statistics data buffer");
+    createRenderStatisticsBuffer();
+
     log("Setup of test meshlet");
     // setting up test meshlet
 
+
+
+
+
+    log("Setting up memory transfer stuff");
+
+    QueueFamilyIndices queueFamilyIndices = findQueueFamilies(m_PhysicalDevice);
+
+    VkCommandPoolCreateInfo poolInfo{};
+    poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+    poolInfo.queueFamilyIndex = queueFamilyIndices.graphicsFamily.value();
+
+    if (vkCreateCommandPool(m_Device, &poolInfo, nullptr, &(m_UploadContext._commandPool)) != VK_SUCCESS) {
+        throw std::runtime_error("failed to create command pool!");
+    }
+
+
+    log("Initializing ImGui");
+    initImgui();
 }
+
+uint32_t imageIndex;
 
 void Renderer::drawFrame(SceneData &scene)
 {
-//    log("=== Drawing frame ===");
-
-//    log("\tWaiting for fences...");
-
     vkWaitForFences(m_Device, 1, &m_InFlightFences[m_CurrentFrame], VK_TRUE, UINT64_MAX);
+
 
     vkResetFences(m_Device, 1, &m_InFlightFences[m_CurrentFrame]);
 
-//    log("\tGetting image...");
+    m_RenderStatistics = *(static_cast<RenderStatistics*>(m_RenderingStatisticsMappedData[m_CurrentFrame]));
+    memset(m_RenderingStatisticsMappedData[m_CurrentFrame], 0, sizeof(RenderStatistics));
 
-    uint32_t imageIndex;
     vkAcquireNextImageKHR(m_Device, m_SwapChain, UINT64_MAX, m_ImageAvailableSemaphores[m_CurrentFrame], VK_NULL_HANDLE, &imageIndex);
 
-//    log("\tRecording command buffer...");
 
-    vkResetCommandBuffer(m_CommandBuffers[m_CurrentFrame], 0);
     recordCommandBuffer(m_CommandBuffers[m_CurrentFrame], imageIndex, scene);
 
 
@@ -1258,13 +1460,20 @@ void Renderer::drawFrame(SceneData &scene)
     submitInfo.signalSemaphoreCount = 1;
     submitInfo.pSignalSemaphores = signalSemaphores;
 
-//    log("Submitting queue...");
-
     if (vkQueueSubmit(m_GraphicsQueue, 1, &submitInfo, m_InFlightFences[m_CurrentFrame]) != VK_SUCCESS) {
         throw std::runtime_error("failed to submit draw command buffer!");
     }
 
 
+}
+
+void Renderer::Present()
+{
+
+    VkSemaphore waitSemaphores[] = {m_ImageAvailableSemaphores[m_CurrentFrame]};
+    VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+
+    VkSemaphore signalSemaphores[] = {m_RenderFinishedSemaphores[m_CurrentFrame]};
 
     VkPresentInfoKHR presentInfo{};
     presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -1278,25 +1487,41 @@ void Renderer::drawFrame(SceneData &scene)
 
     presentInfo.pImageIndices = &imageIndex;
 
-//    log("Presenting queue...");
-
     vkQueuePresentKHR(m_PresentationQueue, &presentInfo);
 
     m_CurrentFrame = (m_CurrentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
+}
 
+void Renderer::waitAllFences()
+{
+    for (int i = 0; i<MAX_FRAMES_IN_FLIGHT; i++)
+    {
+	    vkWaitForFences(m_Device, 1, &(m_InFlightFences[i]), true, 9999999999);
+    }
 }
 
 void Renderer::cleanup(SceneData loadedScene)
 {
+    ImGui_ImplGlfw_Shutdown();
+    ImGui_ImplVulkan_Shutdown();
+    ImGui::DestroyContext();
+
     vkDeviceWaitIdle(m_Device);
 
     for(size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
         vkDestroySemaphore(m_Device, m_ImageAvailableSemaphores[i], nullptr);
         vkDestroySemaphore(m_Device, m_RenderFinishedSemaphores[i], nullptr);
         vkDestroyFence(m_Device, m_InFlightFences[i], nullptr);
+
+        vkDestroyBuffer(m_Device, m_RenderStatisticsDataBuffer[i], nullptr);
+        vkFreeMemory(m_Device, m_RenderStaticsDataMemory[i], nullptr);
+
     }
 
+    vkDestroyFence(m_Device, m_UploadContext._uploadFence, nullptr);
+
     vkDestroyCommandPool(m_Device, m_CommandPool, nullptr);
+    vkDestroyCommandPool(m_Device, (m_UploadContext._commandPool), nullptr);
 
     for (auto framebuffer : m_SwapChainFramebuffers) {
         vkDestroyFramebuffer(m_Device, framebuffer, nullptr);
@@ -1310,6 +1535,9 @@ void Renderer::cleanup(SceneData loadedScene)
     for(auto &heightmap : loadedScene.getHeightmaps()){
         heightmap.Deinit();
     }
+
+
+    vkDestroyQueryPool(m_Device, m_QueryPool, VK_NULL_HANDLE);
 
     vkDestroyPipeline(m_Device, m_GraphicsPipeline, nullptr);
     vkDestroyPipelineLayout(m_Device, m_PipelineLayout, nullptr);
@@ -1332,13 +1560,13 @@ void Renderer::cleanup(SceneData loadedScene)
 
 std::vector<char> Renderer::readFile(const std::string &filepath)
 {
-    
+
     std::ifstream inputStream{filepath, std::ios::ate | std::ios::binary};
 
     if(!inputStream.is_open()){
         throw std::invalid_argument("Could not open file at path " + filepath);
     }
-    
+
     size_t fileSize = static_cast<size_t>(inputStream.tellg());
 
     std::vector<char> buffer(fileSize);
@@ -1354,6 +1582,11 @@ std::vector<char> Renderer::readFile(const std::string &filepath)
 Renderer::Renderer()
 {
 
+}
+
+RenderStatistics Renderer::getRenderStatistics()
+{
+    return m_RenderStatistics;
 }
 
 Camera &Renderer::getCamera() {
@@ -1430,12 +1663,36 @@ void Renderer::initVKSceneElements(SceneData &scene) {
             descriptorMeshletWrite.pImageInfo = nullptr; // Optional
             descriptorMeshletWrite.pTexelBufferView = nullptr; // Optional
 
-            VkWriteDescriptorSet writes[2] = {
+
+
+
+            // bind rendering statistics
+            VkDescriptorBufferInfo renderingStatisticsBufferInfo{};
+            renderingStatisticsBufferInfo.buffer = m_RenderStatisticsDataBuffer[i];
+            renderingStatisticsBufferInfo.offset = 0;
+            renderingStatisticsBufferInfo.range = sizeof(RenderStatistics);
+
+            VkWriteDescriptorSet descriptorRenderingStatisticsWrite{};
+            descriptorRenderingStatisticsWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            descriptorRenderingStatisticsWrite.dstSet = heightmap.m_DescriptorSets.m_DescriptorSets[i];
+            descriptorRenderingStatisticsWrite.dstBinding = 2;
+            descriptorRenderingStatisticsWrite.dstArrayElement = 0;
+
+            descriptorRenderingStatisticsWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+            descriptorRenderingStatisticsWrite.descriptorCount = 1;
+
+            descriptorRenderingStatisticsWrite.pBufferInfo = &renderingStatisticsBufferInfo;
+            descriptorRenderingStatisticsWrite.pImageInfo = nullptr; // Optional
+            descriptorRenderingStatisticsWrite.pTexelBufferView = nullptr; // Optional
+
+
+            VkWriteDescriptorSet writes[3] = {
                     descriptorHeightmapWrite,
-                    descriptorMeshletWrite
+                    descriptorMeshletWrite,
+                    descriptorRenderingStatisticsWrite
             };
 
-            vkUpdateDescriptorSets(m_Device, 2, writes, 0, nullptr);
+            vkUpdateDescriptorSets(m_Device, 3, writes, 0, nullptr);
         }
     }
 }

@@ -80,6 +80,14 @@ inline EncodedMeshletDescription encodeMeshlet( MeshletDescription meshletDescri
 }
 #endif
 
+#define RENDEROPTIONS_DRAWING_MODE_HEIGHT 0
+#define RENDEROPTIONS_DRAWING_MODE_MESHLET 1
+#define RENDEROPTIONS_DRAWING_MODE_LOD 2
+
+struct RenderOptions {
+	int DrawingMode;
+};
+
 // offset can just be determined by k * MAX_MESHLET_LENGTH both in x and y
 
 

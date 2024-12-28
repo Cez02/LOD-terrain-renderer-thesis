@@ -2,7 +2,7 @@
 
 #include <vulkan/vulkan.hpp>
 
-//#define DRAW_WIREFRAME 1
+#define DRAW_WIREFRAME 1
 
 
 

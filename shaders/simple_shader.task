@@ -24,31 +24,37 @@ layout (local_size_x=MAX_PREFERRED_TASK_WORK_GROUP_INVOCATIONS) in;
 
 layout( push_constant ) uniform constants
 {
-    layout (offset = 64) uint MeshletCount;
-    uint HeightmapLength;
-    uint BaseMeshletOffset;
-    float Longitude;
-    float Latitude;
-    uint LODLevel;
+    layout (offset = 64)  vec3 ObservatorPosition;
+     uint padding;
+     uint MeshletCount;
+     uint HeightmapLength;
+     uint BaseMeshletOffset;
+     float Longitude;
+     float Latitude;
+     uint8_t LODLevel;
+
 } PushConstants;
+
+
+// Uniforms
 
 
 
 // SSBOs
 
-layout(std430, binding = 0) buffer HeightmapData {
+layout(std430, binding = 0) readonly buffer HeightmapData {
     int16_t m_Heights[];
 } heightmapData;
 
 #ifdef ENCODED_MESHLETS
 
-    layout(std430, binding = 1) buffer MeshletDescriptions {
+    layout(std430, binding = 1) readonly buffer MeshletDescriptions {
         EncodedMeshletDescription descriptions[];
     } meshletDescriptions;
 
 #else
 
-    layout(std140, binding = 1) buffer MeshletDescriptions {
+    layout(std140, binding = 1) readonly buffer MeshletDescriptions {
         MeshletDescription descriptions[];
     } meshletDescriptions;
 
@@ -74,6 +80,7 @@ struct Task {
     float Latitude;
 
     uint LODLevel;
+    vec3 observatorPosition;
 };
 
 taskPayloadSharedEXT Task OUT;
@@ -81,14 +88,16 @@ taskPayloadSharedEXT Task OUT;
 // Utils
 
 void main() {
+
     OUT.baseMeshletIDOffset = PushConstants.BaseMeshletOffset + baseID * MAX_PREFERRED_MESH_WORK_GROUP_INVOCATIONS;
     OUT.heightmap_length = PushConstants.HeightmapLength;
     OUT.Longitude = PushConstants.Longitude;
     OUT.Latitude = PushConstants.Latitude;
     OUT.LODLevel = PushConstants.LODLevel;
+    OUT.observatorPosition = PushConstants.ObservatorPosition;
 
     UNROLL_LOOP
-    for(int i = 0; i<TASK_ITERATIONS ; i++) {
+    for(uint8_t i = uint8_t(0); i<TASK_ITERATIONS ; i++) {
         // We set the indexes in accordance with LOD level
         OUT.meshletIDLocalOffset[i] = i;
     }
