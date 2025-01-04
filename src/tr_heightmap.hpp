@@ -47,6 +47,8 @@ public:
 
     DescriptorSetBundle m_DescriptorSets;
 
+    bool CheckIfShouldDraw();
+
     Heightmap(std::string dataPath);
 
     void Init(VkDevice device, VkPhysicalDevice physicalDevice);

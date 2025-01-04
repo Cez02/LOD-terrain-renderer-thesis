@@ -94,6 +94,8 @@ public:
 
     uint32_t m_CurrentFrame = 0;
 
+    bool m_RendererReady = false;
+
     Camera m_Camera;
 
     Window *m_AppWindow;

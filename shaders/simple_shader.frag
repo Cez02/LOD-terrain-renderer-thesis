@@ -11,8 +11,6 @@
 
 layout(location=0) in Interpolants {
     vec3  wPos;
-    vec3  wNormal;
-    vec3  wColor;
     float wHeight;
     flat uint meshletID;
     flat float DistFromObservator;
@@ -36,6 +34,7 @@ vec3 getColorFromHeight(float height){
 }
 
 void main() {
+
 /*
     float fact = float(IN.meshletID % 3);
 

@@ -15,6 +15,8 @@ target_include_directories(terrain_renderer
             imgui
             imgui/backends
             imgui/misc/cpp
+
+            stb_image
 )
 
 target_sources(terrain_renderer

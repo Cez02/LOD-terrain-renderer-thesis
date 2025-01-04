@@ -91,8 +91,6 @@ uint laneID = gl_LocalInvocationID.x;
 
 layout(location=0) out Interpolants {
     vec3  wPos;
-    vec3  wNormal;
-    vec3  wColor;
     float   wHeight;
     flat  uint meshletID;
     flat float DistFromObservator;
@@ -133,27 +131,35 @@ vec2 localPolarOffset(uvec2 offset){
 
 void processVertex(uvec2 vertexOffset, MeshletDescription meshlet, inout uint vertexCount){
 
+    uint scaledXDimension = uint( ceil( float(meshlet.Dimensions.x) / float(LOD_LEVEL)));
+    uint vertIndex =  vertexOffset.x + vertexOffset.y * scaledXDimension;
+
     // we perform calculations as if there was no LOD
     vertexOffset *= LOD_LEVEL;
 
+/*
     if (meshlet.Dimensions.x <= vertexOffset.x ||
         meshlet.Dimensions.y <= vertexOffset.y)
         return;
+*/
 
     uint heightmapIndex = meshlet.HeightmapDataOffset +  vertexOffset.y * meshlet.Dimensions.x + vertexOffset.x;
 
     vec2 polarOffset = localPolarOffset(meshlet.Offset + vertexOffset + uvec2(0, 0));
     vec3 vertA = polarToCartesian(IN.Latitude + polarOffset.y, IN.Longitude + polarOffset.x, float(int(heightmapData.m_Heights[heightmapIndex])));
 
+
+
     // Interpolants
-    OUT[vertexCount].meshletID = gl_WorkGroupID.x;
-    OUT[vertexCount].wPos = vertA;
+    OUT[vertIndex].meshletID = gl_WorkGroupID.x;
+    OUT[vertIndex].wPos = vertA;
     int height = int(heightmapData.m_Heights[heightmapIndex]);
-    OUT[vertexCount].wHeight = float(height);
-    OUT[vertexCount].DistFromObservator = dist;
+    OUT[vertIndex].wHeight = float(height);
+    OUT[vertIndex].DistFromObservator = dist;
+    OUT[vertIndex].meshletID = gl_WorkGroupID.x;
 
 
-    gl_MeshVerticesEXT[vertexCount].gl_Position = PushConstants.transform_matrix * vec4(vertA, 1.0);
+    gl_MeshVerticesEXT[vertIndex].gl_Position = PushConstants.transform_matrix * vec4(vertA, 1.0);
     //gl_MeshVerticesEXT[vertexCount].gl_Position = vec4(0, 0, 0, 0);
 
 
@@ -169,6 +175,12 @@ vec3 generalMeshletPosition(MeshletDescription meshlet) {
     vec3 vertA = polarToCartesian(IN.Latitude + polarOffset.y, IN.Longitude + polarOffset.x, float(int(heightmapData.m_Heights[heightmapIndex])));
 
     return vertA;
+}
+
+float observerHorizonDistance(){
+    float height = length(IN.observatorPosition) - 50000;
+
+    return sqrt(2 * 50000 * height + height*height);
 }
 
 void createQuad(uvec2 quadOffset, MeshletDescription meshlet, inout uint primitiveCount){
@@ -242,13 +254,27 @@ void main() {
     vec3 meshletPos = generalMeshletPosition(thisMeshlet);
     dist = length(meshletPos - IN.observatorPosition);
 
+
+    /*
     if(dist > 1000)
         LOD_LEVEL = 8;
     else if(dist > 500)
         LOD_LEVEL = 4;
     else if(dist > 250)
         LOD_LEVEL = 2;
+    */
 
+    LOD_LEVEL = 1 << int(clamp(dist, 0, 800) / 250);
+    LOD_LEVEL = clamp(LOD_LEVEL, 1, 8);
+
+/*
+    // TODO: this doesn't account for curvature of the earth so there's some overhead
+    if(dist > 1.1f * observerHorizonDistance()){
+        SetMeshOutputsEXT(0, 0);
+        return;
+    }
+*/
+   // LOD_LEVEL = 1;
 
     uint vertCount = 0;
     uint primCount = 0;
@@ -264,15 +290,22 @@ void main() {
         }
     }
 
+/*
+    for(uint y = scaledLength - 1; y < scaledLength; y++ ){
+        for(uint x = scaledLength - 1; x < scaledLength; x++ ){
+            uvec2 coord = uvec2(x, y);
+
+            processVertex(coord, thisMeshlet, vertCount);
+        }
+    }
+*/
     atomicAdd(primCounter, primCount);
 
+    SetMeshOutputsEXT(vertCount, primCount);
 
     memoryBarrierShared();
     barrier();
 
     if(gl_GlobalInvocationID.x == 0)
         atomicAdd(renderStatistics.statistics.PrimitiveCount, primCounter);
-
-
-    SetMeshOutputsEXT(vertCount, primCount);
 }

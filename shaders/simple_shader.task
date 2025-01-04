@@ -87,6 +87,51 @@ taskPayloadSharedEXT Task OUT;
 
 // Utils
 
+float PI = 3.1415926;
+
+vec3 polarToCartesian(float lat, float lon, float height){
+    float r = 50000 + height * 1 * 50000 / 6371000;
+    return vec3( r * cos(lat) * sin(lon),
+                 r * sin(lat),
+                 r * cos(lat) * cos(lon)
+                  );
+}
+
+vec2 localPolarOffset(uvec2 offset){
+    offset.y = 1200 - offset.y;
+    vec2 res = (offset * PI ) / (180 * 1200);
+    return res;
+}
+
+vec3 generalMeshletPosition(MeshletDescription meshlet) {
+    uvec2 vertexOffset = uvec2(0, 0);
+
+    uint heightmapIndex = meshlet.HeightmapDataOffset +  vertexOffset.y * meshlet.Dimensions.x + vertexOffset.x;
+
+    vec2 polarOffset = localPolarOffset(meshlet.Offset + vertexOffset + uvec2(0, 0));
+    vec3 vertA = polarToCartesian(OUT.Latitude + polarOffset.y, OUT.Longitude + polarOffset.x, float(int(heightmapData.m_Heights[heightmapIndex])));
+
+    return vertA;
+}
+
+float observerHorizonDistance(){
+    float height = length(OUT.observatorPosition) - 50000;
+
+    return sqrt(2 * 50000 * height + height*height);
+}
+
+bool shouldCull(uint8_t id) {
+
+    MeshletDescription thisMeshlet = meshletDescriptions.descriptions[OUT.baseMeshletIDOffset + id];
+
+    vec3 meshletPos = generalMeshletPosition(thisMeshlet);
+
+    float dist = length(meshletPos - OUT.observatorPosition);
+
+    return dist > 1.1f * observerHorizonDistance();
+}
+
+
 void main() {
 
     OUT.baseMeshletIDOffset = PushConstants.BaseMeshletOffset + baseID * MAX_PREFERRED_MESH_WORK_GROUP_INVOCATIONS;
@@ -96,10 +141,22 @@ void main() {
     OUT.LODLevel = PushConstants.LODLevel;
     OUT.observatorPosition = PushConstants.ObservatorPosition;
 
-    UNROLL_LOOP
+    int meshletCount = 0;
+
+    //UNROLL_LOOP
     for(uint8_t i = uint8_t(0); i<TASK_ITERATIONS ; i++) {
         // We set the indexes in accordance with LOD level
-        OUT.meshletIDLocalOffset[i] = i;
+
+        if(i >= PushConstants.MeshletCount - OUT.baseMeshletIDOffset)
+            continue;
+
+        // meshlet culling
+        if(shouldCull(i))
+            continue;
+
+        OUT.meshletIDLocalOffset[meshletCount] = i;
+        meshletCount++;
+
     }
 
     if(OUT.baseMeshletIDOffset >= PushConstants.MeshletCount){
@@ -107,7 +164,7 @@ void main() {
         return;
     }
 
-    uint meshShadersToEmitt = min(TASK_ITERATIONS, PushConstants.MeshletCount - OUT.baseMeshletIDOffset);
+    //uint meshShadersToEmitt = min(TASK_ITERATIONS, PushConstants.MeshletCount - OUT.baseMeshletIDOffset);
     // We only emit as many mesh shaders as we need
-    EmitMeshTasksEXT(meshShadersToEmitt, 1, 1);
+    EmitMeshTasksEXT(meshletCount, 1, 1);
 }

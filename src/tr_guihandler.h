@@ -5,6 +5,7 @@
 #ifndef TR_GUIHANDLER_H
 #define TR_GUIHANDLER_H
 
+#include "tr_texture.h"
 #include "glm/glm.hpp"
 
 class GUI_Data
@@ -14,6 +15,11 @@ public:
     uint64_t m_RenderedTriangleCount = 0;
     uint m_MeshletCount;
     bool m_ToggleMeshletColoring;
+
+    Texture *m_CompassTexture;
+    float m_CompassRotation = 0;
+
+    glm::vec2 m_PlayerPolarPosition;
 };
 
 class GUIHandler {
