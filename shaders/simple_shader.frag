@@ -12,7 +12,8 @@
 layout(location=0) in Interpolants {
     vec3  wPos;
     float wHeight;
-    flat uint meshletID;
+    flat  uint meshletID;
+    flat uint laneID;
     flat float DistFromObservator;
 } IN;
 

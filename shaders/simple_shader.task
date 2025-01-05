@@ -4,6 +4,8 @@
 
 #extension GL_GOOGLE_include_directive : enable
 
+#extension GL_EXT_shader_atomic_int64 : require
+
 #extension GL_EXT_shader_16bit_storage : require
 
 #extension GL_EXT_shader_explicit_arithmetic_types_int8  : require
@@ -60,6 +62,19 @@ layout(std430, binding = 0) readonly buffer HeightmapData {
 
 #endif
 
+struct RenderStatistics
+{
+    uint64_t PrimitiveCount;
+    uint64_t TaskShaderInvocations;
+    uint64_t MeshShaderInvocations;
+
+};
+
+layout(std430, binding = 2) writeonly buffer RenderStats {
+    RenderStatistics statistics;
+} renderStatistics;
+
+shared int taskShaderInvocations;
 
 // Indexing stuff
 
@@ -87,52 +102,15 @@ taskPayloadSharedEXT Task OUT;
 
 // Utils
 
-float PI = 3.1415926;
-
-vec3 polarToCartesian(float lat, float lon, float height){
-    float r = 50000 + height * 1 * 50000 / 6371000;
-    return vec3( r * cos(lat) * sin(lon),
-                 r * sin(lat),
-                 r * cos(lat) * cos(lon)
-                  );
-}
-
-vec2 localPolarOffset(uvec2 offset){
-    offset.y = 1200 - offset.y;
-    vec2 res = (offset * PI ) / (180 * 1200);
-    return res;
-}
-
-vec3 generalMeshletPosition(MeshletDescription meshlet) {
-    uvec2 vertexOffset = uvec2(0, 0);
-
-    uint heightmapIndex = meshlet.HeightmapDataOffset +  vertexOffset.y * meshlet.Dimensions.x + vertexOffset.x;
-
-    vec2 polarOffset = localPolarOffset(meshlet.Offset + vertexOffset + uvec2(0, 0));
-    vec3 vertA = polarToCartesian(OUT.Latitude + polarOffset.y, OUT.Longitude + polarOffset.x, float(int(heightmapData.m_Heights[heightmapIndex])));
-
-    return vertA;
-}
-
-float observerHorizonDistance(){
-    float height = length(OUT.observatorPosition) - 50000;
-
-    return sqrt(2 * 50000 * height + height*height);
-}
-
-bool shouldCull(uint8_t id) {
-
-    MeshletDescription thisMeshlet = meshletDescriptions.descriptions[OUT.baseMeshletIDOffset + id];
-
-    vec3 meshletPos = generalMeshletPosition(thisMeshlet);
-
-    float dist = length(meshletPos - OUT.observatorPosition);
-
-    return dist > 1.1f * observerHorizonDistance();
-}
-
-
 void main() {
+
+    taskShaderInvocations = 0;
+
+    memoryBarrierShared();
+    barrier();
+
+    atomicAdd(taskShaderInvocations, 1);
+
 
     OUT.baseMeshletIDOffset = PushConstants.BaseMeshletOffset + baseID * MAX_PREFERRED_MESH_WORK_GROUP_INVOCATIONS;
     OUT.heightmap_length = PushConstants.HeightmapLength;
@@ -143,20 +121,21 @@ void main() {
 
     int meshletCount = 0;
 
+    float observerHorizonDistance = observerHorizonDistance(OUT.observatorPosition);
+
     //UNROLL_LOOP
     for(uint8_t i = uint8_t(0); i<TASK_ITERATIONS ; i++) {
         // We set the indexes in accordance with LOD level
 
-        if(i >= PushConstants.MeshletCount - OUT.baseMeshletIDOffset)
-            continue;
+        bool skipMeshlet = i >= PushConstants.MeshletCount - OUT.baseMeshletIDOffset;
 
-        // meshlet culling
-        if(shouldCull(i))
-            continue;
+        int meshletID = min(int(i), int(PushConstants.MeshletCount) - int(OUT.baseMeshletIDOffset) - 1);
+        MeshletDescription meshlet = meshletDescriptions.descriptions[OUT.baseMeshletIDOffset + meshletID];
+
+        skipMeshlet = skipMeshlet || shouldCull(meshlet, PushConstants.Latitude, PushConstants.Longitude, 4000.0f, PushConstants.ObservatorPosition, observerHorizonDistance);
 
         OUT.meshletIDLocalOffset[meshletCount] = i;
-        meshletCount++;
-
+        meshletCount += 1 - int(skipMeshlet);
     }
 
     if(OUT.baseMeshletIDOffset >= PushConstants.MeshletCount){
@@ -164,7 +143,16 @@ void main() {
         return;
     }
 
+    memoryBarrierShared();
+    barrier();
+
+    if(gl_GlobalInvocationID.x == 0){
+        atomicAdd(renderStatistics.statistics.TaskShaderInvocations, taskShaderInvocations);
+    }
+
+
     //uint meshShadersToEmitt = min(TASK_ITERATIONS, PushConstants.MeshletCount - OUT.baseMeshletIDOffset);
     // We only emit as many mesh shaders as we need
     EmitMeshTasksEXT(meshletCount, 1, 1);
+
 }

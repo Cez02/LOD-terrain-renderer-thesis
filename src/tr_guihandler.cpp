@@ -86,6 +86,16 @@ void GUIHandler::DrawGUI()
     stream << std::fixed << m_GUIData.m_RenderedTriangleCount;
     ImGui::Text(("Generated primitives: " + quickAddThousandSeparators(stream.str(), '\'')).c_str());
 
+    stream.clear();
+    stream = std::stringstream();
+    stream << std::fixed << m_GUIData.m_MeshShaderInvocations;
+    ImGui::Text(("  Mesh shader invocs: " + quickAddThousandSeparators(stream.str(), '\'')).c_str());
+
+    stream.clear();
+    stream = std::stringstream();
+    stream << std::fixed << m_GUIData.m_TaskShaderInvocations;
+    ImGui::Text(("  Task shader invocs: " + quickAddThousandSeparators(stream.str(), '\'')).c_str());
+
     // player coords
 
     float longitude = m_GUIData.m_PlayerPolarPosition.x * 180 / glm::pi<float>();

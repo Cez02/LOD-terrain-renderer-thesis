@@ -197,6 +197,8 @@ int main(int argc, char **argv){
 
         RenderStatistics stats = mainRenderer.getRenderStatistics();
         guiHandler.m_GUIData.m_RenderedTriangleCount = stats.PrimitiveCount;
+        guiHandler.m_GUIData.m_MeshShaderInvocations = stats.MeshShaderInvocations;
+        guiHandler.m_GUIData.m_TaskShaderInvocations = stats.TaskShaderInvocations;
 
 
 

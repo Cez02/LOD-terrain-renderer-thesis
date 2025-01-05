@@ -9,11 +9,13 @@
 
 #include <fstream>
 #include <filesystem>
+#include <map>
 #include <glm/gtx/string_cast.hpp>
 
 #include "tr_logger.hpp"
 #include "tr_appconfig.hpp"
 #include "tr_camera.hpp"
+
 
 static
 void LoadTerrain(std::string path, int16_t **dst, size_t *size, float *latitude, float *longitude) {
@@ -57,31 +59,16 @@ void LoadTerrain(std::string path, int16_t **dst, size_t *size, float *latitude,
     inputfile.close();
 }
 
-static glm::vec3 polarToCartesian(float lat, float lon){
-    float r = 50000;
-    return vec3( r * cos(lat) * sin(lon),
-                 r * sin(lat),
-                 r * cos(lat) * cos(lon)
-                  );
-}
-
-float observerHorizonDistance(){
-    float height = length(Camera::instance->m_Position) - 50000;
-
-    return glm::sqrt(2 * 50000 * height + height*height);
-}
-
-
 // We check if the player is even capable of seeing the heightmap
 bool Heightmap::CheckIfShouldDraw()
 {
     // std::cout << "Distances: " << glm::distance(Camera::instance->m_Position, polarToCartesian(m_Latitude + (1.0f / 720.0f) * glm::two_pi<float>(), m_Longitude + (1.0f / 180.0f) * glm::pi<float>())) << " vs " << observerHorizonDistance() << std::endl;
     // std::cout << "Camera pos: " << glm::to_string(Camera::instance->m_Position) << std::endl;
 
-    if (glm::distance(Camera::instance->m_Position, polarToCartesian(m_Latitude, m_Longitude)) > glm::max(1000.0f, observerHorizonDistance()) &&
-        glm::distance(Camera::instance->m_Position, polarToCartesian(m_Latitude + glm::radians<float>(1.0f), m_Longitude + glm::radians<float>(1.0f))) > glm::max(1000.0f, observerHorizonDistance()) &&
-        glm::distance(Camera::instance->m_Position, polarToCartesian(m_Latitude + glm::radians<float>(1.0f), m_Longitude)) > glm::max(1000.0f, observerHorizonDistance()) &&
-        glm::distance(Camera::instance->m_Position, polarToCartesian(m_Latitude, m_Longitude + glm::radians<float>(1.0f))) > glm::max(1000.0f, observerHorizonDistance()))
+    if (glm::distance(Camera::instance->m_Position, polarToCartesian(m_Latitude, m_Longitude, 0)) > glm::max(1000.0f, observerHorizonDistance(Camera::instance->m_Position)) &&
+        glm::distance(Camera::instance->m_Position, polarToCartesian(m_Latitude + glm::radians<float>(1.0f), m_Longitude + glm::radians<float>(1.0f), 0)) > glm::max(1000.0f, observerHorizonDistance(Camera::instance->m_Position)) &&
+        glm::distance(Camera::instance->m_Position, polarToCartesian(m_Latitude + glm::radians<float>(1.0f), m_Longitude, 0)) > glm::max(1000.0f, observerHorizonDistance(Camera::instance->m_Position)) &&
+        glm::distance(Camera::instance->m_Position, polarToCartesian(m_Latitude, m_Longitude + glm::radians<float>(1.0f), 0)) > glm::max(1000.0f, observerHorizonDistance(Camera::instance->m_Position)))
     {
         return false;
     }
@@ -286,6 +273,8 @@ void Heightmap::Draw(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLay
     uint maxTasksEmitted = 32;
 
     int k =0;
+
+    std::map<uint, std::vector<int>> meshletsByLOD;
 
     // vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_TASK_BIT_EXT, sizeof(glm::mat4), sizeof(HeightmapPushConstantData), &data);
     // vkCmdDrawMeshTasksEXT(commandBuffer, m_Meshlets.size() / (maxTasksEmitted), 1, 1);
