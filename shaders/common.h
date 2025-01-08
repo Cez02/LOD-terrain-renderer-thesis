@@ -121,6 +121,17 @@ vec2 localPolarOffset(uvec2 offset){
     vec2 res = (offset * PI ) / (180 * 1200);
     return res;
 }
+
+vec3 vertexToPolarToCartesian(uvec2 offset, float lat, float lon, float height){
+    offset.y = 1200 - offset.y;
+    vec2 res = (offset * PI ) / (180 * 1200) + vec2(lon, lat);
+
+    float r = 50000 + height * 1 * 50000 / 6371000;
+    return vec3( r * cos(res.y) * sin(res.x),
+                 r * sin(res.y),
+                 r * cos(res.y) * cos(res.x)
+                  );
+}
 #endif
 
 
