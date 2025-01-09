@@ -91,9 +91,9 @@ uint LOD_LEVEL;
 #define TASK_ITERATIONS MAX_PREFERRED_MESH_WORK_GROUP_INVOCATIONS
 
 struct Task {
-    u8vec3 quadDescriptions[2049 * MESHLETS_PER_TASK_INVOCATION];
+    u8vec2 meshletOffsets[128 * MESHLETS_PER_TASK_INVOCATION];
 
-    uint8_t padding[2];
+    uint8_t padding[4];
 
     uint   baseMeshletID;
     uint    heightmap_length;
@@ -103,11 +103,8 @@ struct Task {
 
     vec3 observatorPosition;
 
-    uint quadCount;
+    uint globalMeshletCount, localMeshletOffsetsCount;
 
-    uint invocationID;
-    uint globalID;
-    uint workgroupID;
 };
 
 taskPayloadSharedEXT Task OUT;
@@ -120,6 +117,7 @@ u8vec3 encodeQuadDescription(uint8_t meshletOffset, uint8_t quadOffset, uint8_t 
     return u8vec3(meshletOffset, quadOffset, quadStride);
 }
 
+/*
 void createQuad(uvec2 quadOffset, uint LODStride, MeshletDescription meshlet, uint meshletOffset){
 
     bool keepQuad = meshlet.Dimensions.x > quadOffset.x + LODStride && meshlet.Dimensions.y > quadOffset.y + LODStride;
@@ -131,7 +129,7 @@ void createQuad(uvec2 quadOffset, uint LODStride, MeshletDescription meshlet, ui
 
     }
 }
-
+*/
 vec3 generalMeshletPosition(MeshletDescription meshlet) {
     uint heightmapIndex = meshlet.HeightmapDataOffset;
 
@@ -153,16 +151,13 @@ void main() {
     meshletCounter = 0;
     workgroupQuadCount = 0;
 
-    OUT.globalID = gl_GlobalInvocationID.x;
-    OUT.workgroupID = gl_WorkGroupID.x;
-    OUT.baseMeshletID = PushConstants.BaseMeshletOffset + MESHLETS_PER_TASK_INVOCATION * gl_WorkGroupID.x * gl_WorkGroupSize.x;
-
 
     OUT.heightmap_length = PushConstants.HeightmapLength;
     OUT.Longitude = PushConstants.Longitude;
     OUT.Latitude = PushConstants.Latitude;
     OUT.observatorPosition = PushConstants.ObservatorPosition;
 
+    OUT.baseMeshletID = PushConstants.BaseMeshletOffset + MESHLETS_PER_TASK_INVOCATION * gl_WorkGroupID.x * gl_WorkGroupSize.x;
 
 
     memoryBarrierShared();
@@ -180,7 +175,7 @@ void main() {
 
         bool skip = false;
 
-        uint meshletID = PushConstants.BaseMeshletOffset + gl_WorkGroupID.x * gl_WorkGroupSize.x * MESHLETS_PER_TASK_INVOCATION + gl_LocalInvocationID.x * MESHLETS_PER_TASK_INVOCATION + localMeshletOffset;
+        uint meshletID = PushConstants.BaseMeshletOffset + gl_WorkGroupID.x * gl_WorkGroupSize.x * MESHLETS_PER_TASK_INVOCATION + MESHLETS_PER_TASK_INVOCATION * gl_LocalInvocationID.x + localMeshletOffset;
 
 
         skip = meshletID >= PushConstants.MeshletCount;
@@ -192,15 +187,11 @@ void main() {
 
         // Meshlet culling
         float observerHorizonDistance = observerHorizonDistance(OUT.observatorPosition);
-        //bool skipMeshlet = shouldCull(thisMeshlet, PushConstants.Latitude, PushConstants.Longitude, 0.0f, PushConstants.ObservatorPosition, observerHorizonDistance);
 
         bool render = !shouldCull(thisMeshlet, PushConstants.Latitude, PushConstants.Longitude, 0.0f, PushConstants.ObservatorPosition, observerHorizonDistance, PushConstants.ObserverLookingDirection); // early cull later here on meshlet
         //bool render = true;
 
-        skip = skip || !render;
-
-
-        //uint meshletOffset = atomicAdd(meshletCounter, 1);
+        //skip = skip || !render;
 
 
         // Choose LOD level
@@ -210,18 +201,25 @@ void main() {
 
         LOD_LEVEL = 1 << int(clamp(dist, 0, 800) / 250);
         LOD_LEVEL = clamp(LOD_LEVEL, 1, 8);
-        LOD_LEVEL = 1;
+        //LOD_LEVEL = 1;
 
 
 
         // build LOD mesh
 
+        uint meshletOffset = atomicAdd(meshletCounter, int(!skip));
+
+        if(!skip){
+            OUT.meshletOffsets[meshletOffset].x = uint8_t(gl_LocalInvocationID.x * MESHLETS_PER_TASK_INVOCATION + localMeshletOffset);
+            OUT.meshletOffsets[meshletOffset].y = uint8_t(LOD_LEVEL);
+        }
+/*
         for(uint y = 0 + MESHLET_LENGTH * int(skip); y < MESHLET_LENGTH; y += LOD_LEVEL ){
             for(uint x = 0 + MESHLET_LENGTH * int(skip); x < MESHLET_LENGTH; x += LOD_LEVEL ){
                 createQuad(uvec2(x, y), LOD_LEVEL, thisMeshlet, localMeshletOffset);
             }
         }
-
+*/
     }
 
 
@@ -233,9 +231,10 @@ void main() {
     if(gl_LocalInvocationID.x == 0){
         atomicAdd(renderStatistics.statistics.TaskShaderInvocations, taskShaderInvocations);
 
-        OUT.quadCount = workgroupQuadCount;
+        OUT.localMeshletOffsetsCount = meshletCounter;
+        OUT.globalMeshletCount = PushConstants.MeshletCount;
 
-        EmitMeshTasksEXT(workgroupQuadCount / 32 + int(workgroupQuadCount % 32 > 0), 1, 1);
+        EmitMeshTasksEXT(meshletCounter / MESHLETS_PER_MESH_WORKGROUP, 1, 1);
     }
 
 

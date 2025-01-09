@@ -9,6 +9,7 @@
 #define MAX_MESH_OUTPUT_PRIMITIVES $m_MaxMeshOutputPrimitives
 
 #define MESHLETS_PER_TASK_INVOCATION $m_MeshletsPerTaskInvocation
+#define MESHLETS_PER_MESH_WORKGROUP $m_MeshletsPerMeshWorkGroup
 
 
 // if encoded meshlets is not used, this will be removed

@@ -52,6 +52,7 @@ namespace shaders{
         replace(content, "$meshletLength", to_string(APP_CONFIG.m_MeshletInfo.m_MeshletLength));
 
         replace(content, "$m_MeshletsPerTaskInvocation", to_string(APP_CONFIG.m_MeshShaderConfig.m_MeshletsPerTaskInvocation));
+        replace(content, "$m_MeshletsPerMeshWorkGroup", to_string(APP_CONFIG.m_MeshShaderConfig.m_MeshletsPerMeshWorkgroup));
 
 #ifndef ENCODED_MESHLETS
         replace(content, "#define ENCODED_MESHLETS", "\n");

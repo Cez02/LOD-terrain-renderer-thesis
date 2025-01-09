@@ -280,8 +280,8 @@ void Heightmap::Draw(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLay
     // vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_TASK_BIT_EXT, sizeof(glm::mat4), sizeof(HeightmapPushConstantData), &data);
     // vkCmdDrawMeshTasksEXT(commandBuffer, m_Meshlets.size() / (maxTasksEmitted), 1, 1);
 
-    // for(int i = 0; i<m_Meshlets.size();) {
-        data.BaseMeshletOffset = 0;
+    for(int i = 0; i<m_Meshlets.size();) {
+        data.BaseMeshletOffset = i;
 
         vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_TASK_BIT_EXT, sizeof(glm::mat4), sizeof(HeightmapPushConstantData), &data);
 
@@ -289,16 +289,16 @@ void Heightmap::Draw(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLay
 
         workgroupsToCreate += (m_Meshlets.size() % (APP_CONFIG.m_MeshShaderConfig.m_MaxPreferredTaskWorkGroupInvocations * APP_CONFIG.m_MeshShaderConfig.m_MeshletsPerTaskInvocation)) > 0;
 
-        vkCmdDrawMeshTasksEXT(commandBuffer, workgroupsToCreate, 1, 1);
+        vkCmdDrawMeshTasksEXT(commandBuffer, 1, 1, 1);
 
         // std::cout << i << " vs " << m_Meshlets.size() << " vs " << meshletsToDraw << std::endl;
 
-        // i += meshletsToDraw ;
+        i += APP_CONFIG.m_MeshShaderConfig.m_MaxPreferredTaskWorkGroupInvocations * APP_CONFIG.m_MeshShaderConfig.m_MeshletsPerTaskInvocation ;
         k++;
 
         // if (k ==1)
         //     break;
-    // }
+    }
 }
 
 void Heightmap::Deinit() {

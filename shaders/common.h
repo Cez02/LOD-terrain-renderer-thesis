@@ -9,6 +9,7 @@
 #define MAX_MESH_OUTPUT_PRIMITIVES 256
 
 #define MESHLETS_PER_TASK_INVOCATION 2
+#define MESHLETS_PER_MESH_WORKGROUP 1
 
 
 // if encoded meshlets is not used, this will be removed
