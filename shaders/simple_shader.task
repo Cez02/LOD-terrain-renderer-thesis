@@ -170,7 +170,7 @@ void main() {
 
     // Pass on data
 
-    //UNROLL_LOOP
+    UNROLL_LOOP
     for(uint localMeshletOffset = 0; localMeshletOffset < MESHLETS_PER_TASK_INVOCATION; localMeshletOffset++){
 
         bool skip = false;
@@ -213,13 +213,7 @@ void main() {
             OUT.meshletOffsets[meshletOffset].x = uint8_t(gl_LocalInvocationID.x * MESHLETS_PER_TASK_INVOCATION + localMeshletOffset);
             OUT.meshletOffsets[meshletOffset].y = uint8_t(LOD_LEVEL);
         }
-/*
-        for(uint y = 0 + MESHLET_LENGTH * int(skip); y < MESHLET_LENGTH; y += LOD_LEVEL ){
-            for(uint x = 0 + MESHLET_LENGTH * int(skip); x < MESHLET_LENGTH; x += LOD_LEVEL ){
-                createQuad(uvec2(x, y), LOD_LEVEL, thisMeshlet, localMeshletOffset);
-            }
-        }
-*/
+
     }
 
 

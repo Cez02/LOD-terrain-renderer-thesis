@@ -183,7 +183,7 @@ void main() {
 
     atomicAdd(meshShaderInvocations, 1);
 
-
+    UNROLL_LOOP
     for(uint i = 0; i < MESHLETS_PER_MESH_WORKGROUP; i++){
         uint meshletID = IN.baseMeshletID + IN.meshletOffsets[localMeshletOffsetBaseID + i].x;
 
