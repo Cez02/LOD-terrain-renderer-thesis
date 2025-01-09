@@ -4,6 +4,10 @@ LOD terrain renderer using mesh shaders via Vulkan (thesis project)
 
 ## Building
 
+### Cloning
+
+When cloning the repo, remember to use the `--recurse-submodules` as imgui is also cloned as a git submodule.
+
 ### Dependencies
 
 In order to build the project, the following are required:
