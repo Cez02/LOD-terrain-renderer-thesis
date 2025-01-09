@@ -5,6 +5,10 @@ LIST(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 add_executable(terrain_renderer)
 
+# options
+
+option(DRAW_WIREFRAME "Draw the terrain wireframe." OFF)
+
 # dependencies
 
 add_subdirectory(third-party)
@@ -19,6 +23,13 @@ target_compile_definitions(terrain_renderer
     PUBLIC
         GLFW_INCLUDE_VULKAN
 )
+
+if(DRAW_WIREFRAME)
+    target_compile_definitions(terrain_renderer
+        PUBLIC
+            DRAW_WIREFRAME
+    )
+endif()
 
 target_link_libraries(terrain_renderer
     PUBLIC
