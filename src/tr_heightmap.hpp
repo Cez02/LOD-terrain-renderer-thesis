@@ -8,10 +8,11 @@
 
 struct HeightmapPushConstantData {
     glm::vec3 ObservatorPosition;
-    uint padding;
-    uint MeshletCount;
-    uint HeightmapLength;
-    uint BaseMeshletOffset;
+    int padding;
+    glm::vec3 ObserverLookingDirection;
+    uint16_t MeshletCount;
+    uint16_t HeightmapLength;
+    uint16_t BaseMeshletOffset;
     float Longitude;
     float Latitude;
     uint8_t LODLevel;

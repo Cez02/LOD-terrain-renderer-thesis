@@ -14,7 +14,7 @@ layout(location=0) in Interpolants {
     float wHeight;
     flat  uint meshletID;
     flat uint laneID;
-    flat float DistFromObservator;
+    float DistFromObservator;
 } IN;
 
 
@@ -53,8 +53,9 @@ void main() {
 */
 
     //out_Color = vec4(IN.wNormal + vec3(1, 1, 1), 2.0f) * 0.5f;
-    out_Color = vec4(getColorFromHeight(IN.wHeight), 1.0);
-    //out_Color = vec4(1.0, 1.0, 1.0, 1.0);
+    //out_Color = vec4( mix(getColorFromHeight(IN.wHeight), vec3(0.439, 0.788, 1.0), clamp(IN.DistFromObservator / 1000.0, 0, 1)), 1.0);
+    out_Color = vec4( getColorFromHeight(IN.wHeight), 1.0);
+        //out_Color = vec4(1.0, 1.0, 1.0, 1.0);
 /*
     float ambientFactor = max( dot(normalize(IN.wNormal), normalize(vec3(1, 1, 1))), 0.0);
 

@@ -73,8 +73,9 @@ layout( push_constant ) uniform constants
 // Task shader input
 
 struct Task {
-    u8vec4 quadDescriptions[2049 * MESHLETS_PER_TASK_INVOCATION];
+    u8vec3 quadDescriptions[2049 * MESHLETS_PER_TASK_INVOCATION];
 
+    uint8_t padding[2];
 
     uint   baseMeshletID;
     uint    heightmap_length;
@@ -136,7 +137,7 @@ void processVertex(uvec2 vertexOffset, MeshletDescription meshlet, int vertexInd
     // Interpolants
     OUT[vertIndex].wPos = vertA;
     OUT[vertIndex].wHeight = height;
-    OUT[vertIndex].DistFromObservator = 0;
+    OUT[vertIndex].DistFromObservator = length(vertA - IN.observatorPosition);
     OUT[vertIndex].meshletID = meshletID;
     OUT[vertIndex].laneID = 0;
 
@@ -169,7 +170,7 @@ void main() {
     primCounter = 0;
     meshShaderInvocations = 0;
 
-    bool skip = quadID > IN.quadCount;
+    bool skip = quadID + 1 > IN.quadCount;
 
 
     if(skip){

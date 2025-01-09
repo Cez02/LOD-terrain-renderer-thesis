@@ -28,13 +28,14 @@ layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
 layout( push_constant ) uniform constants
 {
     layout (offset = 64)  vec3 ObservatorPosition;
-     uint padding;
-     uint MeshletCount;
-     uint HeightmapLength;
-     uint BaseMeshletOffset;
-     float Longitude;
-     float Latitude;
-     uint8_t LODLevel;
+    int padding;
+     vec3 ObserverLookingDirection;
+    uint16_t MeshletCount;
+    uint16_t HeightmapLength;
+    uint16_t BaseMeshletOffset;
+    float Longitude;
+    float Latitude;
+    uint8_t LODLevel;
 
 } PushConstants;
 
@@ -90,7 +91,9 @@ uint LOD_LEVEL;
 #define TASK_ITERATIONS MAX_PREFERRED_MESH_WORK_GROUP_INVOCATIONS
 
 struct Task {
-    u8vec4 quadDescriptions[2049 * MESHLETS_PER_TASK_INVOCATION];
+    u8vec3 quadDescriptions[2049 * MESHLETS_PER_TASK_INVOCATION];
+
+    uint8_t padding[2];
 
     uint   baseMeshletID;
     uint    heightmap_length;
@@ -113,8 +116,8 @@ shared uint workgroupQuadCount;
 
 // Mesh shader preparation
 
-u8vec4 encodeQuadDescription(uint8_t meshletOffset, uint8_t quadOffset, uint8_t quadStride){
-    return u8vec4(meshletOffset, quadOffset, quadStride, 42);
+u8vec3 encodeQuadDescription(uint8_t meshletOffset, uint8_t quadOffset, uint8_t quadStride){
+    return u8vec3(meshletOffset, quadOffset, quadStride);
 }
 
 void createQuad(uvec2 quadOffset, uint LODStride, MeshletDescription meshlet, uint meshletOffset){
@@ -180,7 +183,7 @@ void main() {
         uint meshletID = PushConstants.BaseMeshletOffset + gl_WorkGroupID.x * gl_WorkGroupSize.x * MESHLETS_PER_TASK_INVOCATION + gl_LocalInvocationID.x * MESHLETS_PER_TASK_INVOCATION + localMeshletOffset;
 
 
-        skip = meshletID > PushConstants.MeshletCount;
+        skip = meshletID >= PushConstants.MeshletCount;
         meshletID = min(meshletID, PushConstants.MeshletCount - 1);
 
 
@@ -189,9 +192,9 @@ void main() {
 
         // Meshlet culling
         float observerHorizonDistance = observerHorizonDistance(OUT.observatorPosition);
-        bool skipMeshlet = shouldCull(thisMeshlet, PushConstants.Latitude, PushConstants.Longitude, 0.0f, PushConstants.ObservatorPosition, observerHorizonDistance);
+        //bool skipMeshlet = shouldCull(thisMeshlet, PushConstants.Latitude, PushConstants.Longitude, 0.0f, PushConstants.ObservatorPosition, observerHorizonDistance);
 
-        bool render = !shouldCull(thisMeshlet, PushConstants.Latitude, PushConstants.Longitude, 0.0f, PushConstants.ObservatorPosition, observerHorizonDistance); // early cull later here on meshlet
+        bool render = !shouldCull(thisMeshlet, PushConstants.Latitude, PushConstants.Longitude, 0.0f, PushConstants.ObservatorPosition, observerHorizonDistance, PushConstants.ObserverLookingDirection); // early cull later here on meshlet
         //bool render = true;
 
         skip = skip || !render;
@@ -207,7 +210,7 @@ void main() {
 
         LOD_LEVEL = 1 << int(clamp(dist, 0, 800) / 250);
         LOD_LEVEL = clamp(LOD_LEVEL, 1, 8);
-        //LOD_LEVEL = 1;
+        LOD_LEVEL = 1;
 
 
 

@@ -269,6 +269,7 @@ void Heightmap::Draw(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLay
     data.BaseMeshletOffset = 0;
     data.LODLevel = APP_CONFIG.m_LODLevel;
     data.ObservatorPosition = observatorPosition;
+    data.ObserverLookingDirection = Camera::instance->getForwardVector();
 
     uint maxTasksEmitted = 128;
 

@@ -159,23 +159,29 @@ float observerHorizonDistance(vec3 observerPosition){
 #ifdef __cplusplus
 static
 #endif
-bool shouldCull(MeshletDescription meshletDescription, float latitude, float longitude, float height, vec3 observerPosition) {
+bool shouldCull(MeshletDescription meshletDescription, float latitude, float longitude, float height, vec3 observerPosition, vec3 observerLookingDirection) {
     vec3 meshletPos = generalMeshletPosition(meshletDescription, latitude, longitude, height);
+
+    float dir = dot(normalize(observerLookingDirection), normalize(meshletPos - observerPosition));
+    //dir = 1.0f;
 
     float dist = length(meshletPos - observerPosition);
 
-    return dist > 1.5f * observerHorizonDistance(observerPosition);
+    return dist > 1.5f * observerHorizonDistance(observerPosition) || dir < 0.0f;
 }
 
 #ifdef __cplusplus
 static
 #endif
-bool shouldCull(MeshletDescription meshletDescription, float latitude, float longitude, float height, vec3 observerPosition, float observerHorizonDistanceCalculated) {
+bool shouldCull(MeshletDescription meshletDescription, float latitude, float longitude, float height, vec3 observerPosition, float observerHorizonDistanceCalculated, vec3 observerLookingDirection) {
     vec3 meshletPos = generalMeshletPosition(meshletDescription, latitude, longitude, height);
+
+    float dir = dot(normalize(observerLookingDirection), normalize(meshletPos - observerPosition));
+    //dir = 1.0f;
 
     float dist = length(meshletPos - observerPosition);
 
-    return dist > 1.5f * observerHorizonDistanceCalculated;
+    return dist > 1.5f * observerHorizonDistanceCalculated || dir < 0.0f;
 }
 
 
