@@ -35,6 +35,6 @@ Additional options can be added when calling the first `cmake` command by adding
 
 ## Usage
 
-In order to use the app, traverse into the built binary directory. Next create a `heightmaps` folder like the one in the root directory of the repo and copy desired SRTM heightmaps inside. An example heightmap is also included in the `heightmaps` directory. The program will load the heightmaps inside the directory - note this is not a recursive action so subdirectories won't be searched.
+In order to use the app, traverse into the built binary directory. Next create a `heightmaps` folder like the one in the root directory of the repo and copy desired SRTM heightmaps inside. An example heightmap is also included in the `heightmaps` directory. The program will load the heightmaps inside the directory - note this is not a recursive action so subdirectories won't be searched. Other SRTM heightmaps can be found at the [coverage map site](https://www.viewfinderpanoramas.org/Coverage%20map%20viewfinderpanoramas_org3.htm).
 
 Currently there is no way to set the observer's geographic coordinates. This feature will be added a command-line option.
