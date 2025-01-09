@@ -12,22 +12,20 @@ set(IMGUI_SOURCES
 
 # This is a fixed shaderc lib
 add_library(custom_shaderc_combined STATIC IMPORTED GLOBAL)
-set_property(TARGET custom_shaderc_combined APPEND PROPERTY IMPORTED_CONFIGURATIONS DEBUG)
 set_target_properties(custom_shaderc_combined PROPERTIES
-        IMPORTED_LINK_INTERFACE_LANGUAGES_DEBUG "CXX"
-        IMPORTED_LOCATION_DEBUG "${CMAKE_CURRENT_SOURCE_DIR}/shaderc/libshaderc_combined.a"
+        IMPORTED_LINK_INTERFACE_LANGUAGES "CXX"
+        IMPORTED_LOCATION "${CMAKE_CURRENT_SOURCE_DIR}/shaderc/lib/libshaderc_combined.a"
 )
 
-
 target_include_directories(terrain_renderer
-        PUBLIC
-            imgui
-            imgui/backends
-            imgui/misc/cpp
+    PUBLIC
+        imgui
+        imgui/backends
+        imgui/misc/cpp
 
-            stb_image
+        stb_image
 
-            custom_shaderc_combined
+        .
 )
 
 target_sources(terrain_renderer

@@ -23,6 +23,7 @@ target_compile_definitions(terrain_renderer
 target_link_libraries(terrain_renderer
     PUBLIC
         glfw
+        custom_shaderc_combined
         vulkan
 )
 

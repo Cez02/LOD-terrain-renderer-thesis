@@ -13,7 +13,7 @@
 #include <cstring>
 #include <array>
 
-#include <shaderc/shaderc.hpp>
+#include "shaderc/shaderc.hpp"
 
 #include <vulkan/vulkan.hpp>
 
