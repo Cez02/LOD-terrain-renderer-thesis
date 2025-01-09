@@ -9,10 +9,13 @@
 
 #include <fstream>
 #include <filesystem>
+#include <map>
 #include <glm/gtx/string_cast.hpp>
 
 #include "tr_logger.hpp"
 #include "tr_appconfig.hpp"
+#include "tr_camera.hpp"
+
 
 static
 void LoadTerrain(std::string path, int16_t **dst, size_t *size, float *latitude, float *longitude) {
@@ -54,6 +57,23 @@ void LoadTerrain(std::string path, int16_t **dst, size_t *size, float *latitude,
     }
 
     inputfile.close();
+}
+
+// We check if the player is even capable of seeing the heightmap
+bool Heightmap::CheckIfShouldDraw()
+{
+    // std::cout << "Distances: " << glm::distance(Camera::instance->m_Position, polarToCartesian(m_Latitude + (1.0f / 720.0f) * glm::two_pi<float>(), m_Longitude + (1.0f / 180.0f) * glm::pi<float>())) << " vs " << observerHorizonDistance() << std::endl;
+    // std::cout << "Camera pos: " << glm::to_string(Camera::instance->m_Position) << std::endl;
+
+    if (glm::distance(Camera::instance->m_Position, polarToCartesian(m_Latitude, m_Longitude, 0)) > glm::max(1000.0f, observerHorizonDistance(Camera::instance->m_Position)) &&
+        glm::distance(Camera::instance->m_Position, polarToCartesian(m_Latitude + glm::radians<float>(1.0f), m_Longitude + glm::radians<float>(1.0f), 0)) > glm::max(1000.0f, observerHorizonDistance(Camera::instance->m_Position)) &&
+        glm::distance(Camera::instance->m_Position, polarToCartesian(m_Latitude + glm::radians<float>(1.0f), m_Longitude, 0)) > glm::max(1000.0f, observerHorizonDistance(Camera::instance->m_Position)) &&
+        glm::distance(Camera::instance->m_Position, polarToCartesian(m_Latitude, m_Longitude + glm::radians<float>(1.0f), 0)) > glm::max(1000.0f, observerHorizonDistance(Camera::instance->m_Position)))
+    {
+        return false;
+    }
+
+    return true;
 }
 
 Heightmap::Heightmap(std::string dataPath)
@@ -238,6 +258,9 @@ void Heightmap::Bind(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLay
 
 void Heightmap::Draw(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLayout, glm::vec3 observatorPosition) {
 
+    if (!CheckIfShouldDraw())
+        return;
+
     HeightmapPushConstantData data;
     data.MeshletCount = m_Meshlets.size();
     data.HeightmapLength = m_HeightmapLength;
@@ -246,9 +269,13 @@ void Heightmap::Draw(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLay
     data.BaseMeshletOffset = 0;
     data.LODLevel = APP_CONFIG.m_LODLevel;
     data.ObservatorPosition = observatorPosition;
-    uint maxTasksEmitted = APP_CONFIG.m_MeshShaderConfig.m_MaxPreferredTaskWorkGroupInvocations;
+    data.ObserverLookingDirection = Camera::instance->getForwardVector();
+
+    uint maxTasksEmitted = 128;
 
     int k =0;
+
+    std::map<uint, std::vector<int>> meshletsByLOD;
 
     // vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_TASK_BIT_EXT, sizeof(glm::mat4), sizeof(HeightmapPushConstantData), &data);
     // vkCmdDrawMeshTasksEXT(commandBuffer, m_Meshlets.size() / (maxTasksEmitted), 1, 1);
@@ -258,14 +285,18 @@ void Heightmap::Draw(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLay
 
         vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_TASK_BIT_EXT, sizeof(glm::mat4), sizeof(HeightmapPushConstantData), &data);
 
-        uint meshletsDrawn = maxTasksEmitted * APP_CONFIG.m_MeshShaderConfig.m_MaxPreferredMeshWorkGroupInvocations;
+        uint workgroupsToCreate = m_Meshlets.size() / (APP_CONFIG.m_MeshShaderConfig.m_MaxPreferredTaskWorkGroupInvocations * APP_CONFIG.m_MeshShaderConfig.m_MeshletsPerTaskInvocation);
 
-        vkCmdDrawMeshTasksEXT(commandBuffer, maxTasksEmitted, 1, 1);
+        workgroupsToCreate += (m_Meshlets.size() % (APP_CONFIG.m_MeshShaderConfig.m_MaxPreferredTaskWorkGroupInvocations * APP_CONFIG.m_MeshShaderConfig.m_MeshletsPerTaskInvocation)) > 0;
 
-        i += meshletsDrawn ;
+        vkCmdDrawMeshTasksEXT(commandBuffer, 1, 1, 1);
+
+        // std::cout << i << " vs " << m_Meshlets.size() << " vs " << meshletsToDraw << std::endl;
+
+        i += APP_CONFIG.m_MeshShaderConfig.m_MaxPreferredTaskWorkGroupInvocations * APP_CONFIG.m_MeshShaderConfig.m_MeshletsPerTaskInvocation ;
         k++;
 
-        // if (k ==2)
+        // if (k ==1)
         //     break;
     }
 }

@@ -4,41 +4,40 @@
 
 #extension GL_GOOGLE_include_directive : enable
 
+#extension GL_EXT_shader_atomic_int64 : require
+
 #extension GL_EXT_shader_16bit_storage : require
 
 #extension GL_EXT_shader_explicit_arithmetic_types_int8  : require
 #extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int16 : require
 
 #extension GL_EXT_mesh_shader : require
 
+#extension GL_KHR_shader_subgroup_basic : require
 #extension GL_EXT_control_flow_attributes: require
 #define UNROLL_LOOP [[unroll]]
 
 
 #include "common.h"
 
-layout (local_size_x=MAX_PREFERRED_TASK_WORK_GROUP_INVOCATIONS) in;
-
+layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
 
 // Push constants
 
 layout( push_constant ) uniform constants
 {
     layout (offset = 64)  vec3 ObservatorPosition;
-     uint padding;
-     uint MeshletCount;
-     uint HeightmapLength;
-     uint BaseMeshletOffset;
-     float Longitude;
-     float Latitude;
-     uint8_t LODLevel;
+    int padding;
+     vec3 ObserverLookingDirection;
+    uint16_t MeshletCount;
+    uint16_t HeightmapLength;
+    uint16_t BaseMeshletOffset;
+    float Longitude;
+    float Latitude;
+    uint8_t LODLevel;
 
 } PushConstants;
-
-
-// Uniforms
-
-
 
 // SSBOs
 
@@ -60,6 +59,19 @@ layout(std430, binding = 0) readonly buffer HeightmapData {
 
 #endif
 
+struct RenderStatistics
+{
+    uint64_t PrimitiveCount;
+    uint64_t TaskShaderInvocations;
+    uint64_t MeshShaderInvocations;
+
+};
+
+layout(std430, binding = 2) writeonly buffer RenderStats {
+    RenderStatistics statistics;
+} renderStatistics;
+
+shared int taskShaderInvocations;
 
 // Indexing stuff
 
@@ -67,47 +79,157 @@ uint baseID = gl_WorkGroupID.x;
 uint laneID = gl_LocalInvocationID.x;
 
 
+
+// Utils
+
+uint LOD_LEVEL;
+
+
+
 // Task payload
 
 #define TASK_ITERATIONS MAX_PREFERRED_MESH_WORK_GROUP_INVOCATIONS
 
 struct Task {
-    uint   baseMeshletIDOffset;
-    uint   meshletIDLocalOffset[MAX_PREFERRED_MESH_WORK_GROUP_INVOCATIONS];
+    u8vec2 meshletOffsets[128 * MESHLETS_PER_TASK_INVOCATION];
+
+    uint8_t padding[4];
+
+    uint   baseMeshletID;
     uint    heightmap_length;
 
     float Longitude;
     float Latitude;
 
-    uint LODLevel;
     vec3 observatorPosition;
+
+    uint globalMeshletCount, localMeshletOffsetsCount;
+
 };
 
 taskPayloadSharedEXT Task OUT;
 
-// Utils
+shared uint workgroupQuadCount;
+
+// Mesh shader preparation
+
+u8vec3 encodeQuadDescription(uint8_t meshletOffset, uint8_t quadOffset, uint8_t quadStride){
+    return u8vec3(meshletOffset, quadOffset, quadStride);
+}
+
+/*
+void createQuad(uvec2 quadOffset, uint LODStride, MeshletDescription meshlet, uint meshletOffset){
+
+    bool keepQuad = meshlet.Dimensions.x > quadOffset.x + LODStride && meshlet.Dimensions.y > quadOffset.y + LODStride;
+
+    if(keepQuad){
+        uint quadDescriptionOffset = atomicAdd(workgroupQuadCount, 1);
+
+        OUT.quadDescriptions[quadDescriptionOffset] = encodeQuadDescription(uint8_t(gl_LocalInvocationID.x * MESHLETS_PER_TASK_INVOCATION + meshletOffset), uint8_t(quadOffset.x + quadOffset.y * meshlet.Dimensions.x), uint8_t(LODStride));
+
+    }
+}
+*/
+vec3 generalMeshletPosition(MeshletDescription meshlet) {
+    uint heightmapIndex = meshlet.HeightmapDataOffset;
+
+    vec2 polarOffset = localPolarOffset(meshlet.Offset);
+    vec3 vertA = polarToCartesian(OUT.Latitude + polarOffset.y, OUT.Longitude + polarOffset.x, float(int(heightmapData.m_Heights[heightmapIndex])));
+
+    return vertA;
+}
+
+// Core logic
+
+shared uint meshletCounter;
 
 void main() {
 
-    OUT.baseMeshletIDOffset = PushConstants.BaseMeshletOffset + baseID * MAX_PREFERRED_MESH_WORK_GROUP_INVOCATIONS;
+
+    LOD_LEVEL = 1;
+    taskShaderInvocations = 0;
+    meshletCounter = 0;
+    workgroupQuadCount = 0;
+
+
     OUT.heightmap_length = PushConstants.HeightmapLength;
     OUT.Longitude = PushConstants.Longitude;
     OUT.Latitude = PushConstants.Latitude;
-    OUT.LODLevel = PushConstants.LODLevel;
     OUT.observatorPosition = PushConstants.ObservatorPosition;
 
+    OUT.baseMeshletID = PushConstants.BaseMeshletOffset + MESHLETS_PER_TASK_INVOCATION * gl_WorkGroupID.x * gl_WorkGroupSize.x;
+
+
+    memoryBarrierShared();
+    barrier();
+
+    atomicAdd(taskShaderInvocations, 1);
+
+    memoryBarrierShared();
+    barrier();
+
+    // Pass on data
+
     UNROLL_LOOP
-    for(uint8_t i = uint8_t(0); i<TASK_ITERATIONS ; i++) {
-        // We set the indexes in accordance with LOD level
-        OUT.meshletIDLocalOffset[i] = i;
+    for(uint localMeshletOffset = 0; localMeshletOffset < MESHLETS_PER_TASK_INVOCATION; localMeshletOffset++){
+
+        bool skip = false;
+
+        uint meshletID = PushConstants.BaseMeshletOffset + gl_WorkGroupID.x * gl_WorkGroupSize.x * MESHLETS_PER_TASK_INVOCATION + MESHLETS_PER_TASK_INVOCATION * gl_LocalInvocationID.x + localMeshletOffset;
+
+
+        skip = meshletID >= PushConstants.MeshletCount;
+        meshletID = min(meshletID, PushConstants.MeshletCount - 1);
+
+
+        MeshletDescription thisMeshlet = meshletDescriptions.descriptions[meshletID];
+
+
+        // Meshlet culling
+        float observerHorizonDistance = observerHorizonDistance(OUT.observatorPosition);
+
+        bool render = !shouldCull(thisMeshlet, PushConstants.Latitude, PushConstants.Longitude, 0.0f, PushConstants.ObservatorPosition, observerHorizonDistance, PushConstants.ObserverLookingDirection); // early cull later here on meshlet
+        //bool render = true;
+
+        //skip = skip || !render;
+
+
+        // Choose LOD level
+
+        vec3 meshletPos = generalMeshletPosition(thisMeshlet);
+        float dist = length(meshletPos - OUT.observatorPosition);
+
+        LOD_LEVEL = 1 << int(clamp(dist, 0, 800) / 250);
+        LOD_LEVEL = clamp(LOD_LEVEL, 1, 8);
+        //LOD_LEVEL = 1;
+
+
+
+        // build LOD mesh
+
+        uint meshletOffset = atomicAdd(meshletCounter, int(!skip));
+
+        if(!skip){
+            OUT.meshletOffsets[meshletOffset].x = uint8_t(gl_LocalInvocationID.x * MESHLETS_PER_TASK_INVOCATION + localMeshletOffset);
+            OUT.meshletOffsets[meshletOffset].y = uint8_t(LOD_LEVEL);
+        }
+
     }
 
-    if(OUT.baseMeshletIDOffset >= PushConstants.MeshletCount){
-        //EmitMeshTasksEXT(0, 1, 1);
-        return;
+
+    memoryBarrierShared();
+    barrier();
+
+
+
+    if(gl_LocalInvocationID.x == 0){
+        atomicAdd(renderStatistics.statistics.TaskShaderInvocations, taskShaderInvocations);
+
+        OUT.localMeshletOffsetsCount = meshletCounter;
+        OUT.globalMeshletCount = PushConstants.MeshletCount;
+
+        EmitMeshTasksEXT(meshletCounter / MESHLETS_PER_MESH_WORKGROUP, 1, 1);
     }
 
-    uint meshShadersToEmitt = min(TASK_ITERATIONS, PushConstants.MeshletCount - OUT.baseMeshletIDOffset);
-    // We only emit as many mesh shaders as we need
-    EmitMeshTasksEXT(meshShadersToEmitt, 1, 1);
+
 }

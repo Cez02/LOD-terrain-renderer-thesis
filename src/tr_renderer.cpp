@@ -279,7 +279,7 @@ QueueFamilyIndices Renderer::findQueueFamilies(VkPhysicalDevice device) {
 
     int i = 0;
     for (const auto& queueFamily : queueFamilies) {
-        if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+        if ((queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)) {
             indices.graphicsFamily = i;
         }
 
@@ -354,6 +354,7 @@ bool Renderer::isDeviceSuitable(VkPhysicalDevice device) {
     log("Max preffered task workgroup invocations: " + std::to_string(meshShaderProperties.maxPreferredTaskWorkGroupInvocations));
     log("Max vertices out: " + std::to_string(meshShaderProperties.maxMeshOutputVertices));
     log("Max primitives out: " + std::to_string(meshShaderProperties.maxMeshOutputPrimitives));
+    log("Max payload size: " + std::to_string(meshShaderProperties.maxTaskPayloadSize));
 
     log("Supported API version: " + std::to_string(VK_API_VERSION_MAJOR(deviceProperties.properties.apiVersion)) + "." + std::to_string(VK_API_VERSION_MINOR(deviceProperties.properties.apiVersion)));
 
@@ -817,7 +818,7 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
     renderPassInfo.renderArea.extent = m_SwapChainExtent;
 
     std::array<VkClearValue, 2> clearValues{};
-    clearValues[0].color = {{0.0f, 0.0f, 0.0f, 1.0f}};
+    clearValues[0].color = {{0.439, 0.788, 1.0, 1.0f}};
     clearValues[1].depthStencil = {1.0f, 0};    renderPassInfo.clearValueCount = 1;
 
     renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());

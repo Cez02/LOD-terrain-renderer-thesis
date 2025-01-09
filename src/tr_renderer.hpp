@@ -35,6 +35,8 @@ struct UploadContext {
 struct RenderStatistics
 {
     uint64_t PrimitiveCount;
+    uint64_t TaskShaderInvocations;
+    uint64_t MeshShaderInvocations;
 };
 
 
@@ -93,6 +95,8 @@ public:
     RenderStatistics m_RenderStatistics;
 
     uint32_t m_CurrentFrame = 0;
+
+    bool m_RendererReady = false;
 
     Camera m_Camera;
 
