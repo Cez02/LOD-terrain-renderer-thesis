@@ -8,6 +8,9 @@
 #define MAX_MESH_OUTPUT_VERTICES $m_MaxMeshOutputVertices
 #define MAX_MESH_OUTPUT_PRIMITIVES $m_MaxMeshOutputPrimitives
 
+#define MESHLETS_PER_TASK_INVOCATION $m_MeshletsPerTaskInvocation
+
+
 // if encoded meshlets is not used, this will be removed
 #define ENCODED_MESHLETS
 

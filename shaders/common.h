@@ -8,6 +8,9 @@
 #define MAX_MESH_OUTPUT_VERTICES 256
 #define MAX_MESH_OUTPUT_PRIMITIVES 256
 
+#define MESHLETS_PER_TASK_INVOCATION 2
+
+
 // if encoded meshlets is not used, this will be removed
 
 

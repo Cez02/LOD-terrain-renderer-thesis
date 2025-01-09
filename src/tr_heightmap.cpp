@@ -284,9 +284,9 @@ void Heightmap::Draw(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLay
 
         vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_TASK_BIT_EXT, sizeof(glm::mat4), sizeof(HeightmapPushConstantData), &data);
 
-        uint workgroupsToCreate = m_Meshlets.size() / (APP_CONFIG.m_MeshShaderConfig.m_MaxPreferredTaskWorkGroupInvocations);
+        uint workgroupsToCreate = m_Meshlets.size() / (APP_CONFIG.m_MeshShaderConfig.m_MaxPreferredTaskWorkGroupInvocations * APP_CONFIG.m_MeshShaderConfig.m_MeshletsPerTaskInvocation);
 
-        workgroupsToCreate += (m_Meshlets.size() % (APP_CONFIG.m_MeshShaderConfig.m_MaxPreferredTaskWorkGroupInvocations)) > 0;
+        workgroupsToCreate += (m_Meshlets.size() % (APP_CONFIG.m_MeshShaderConfig.m_MaxPreferredTaskWorkGroupInvocations * APP_CONFIG.m_MeshShaderConfig.m_MeshletsPerTaskInvocation)) > 0;
 
         vkCmdDrawMeshTasksEXT(commandBuffer, workgroupsToCreate, 1, 1);
 

@@ -26,6 +26,8 @@ public:
 
         uint32_t m_MaxTaskWorkgroupSizeTotal;
 
+        uint32_t m_MeshletsPerTaskInvocation = 2;
+
     } m_MeshShaderConfig;
 
     struct MeshletInfo {

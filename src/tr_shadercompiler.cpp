@@ -51,6 +51,8 @@ namespace shaders{
         replace(content, "$m_MaxMeshOutputPrimitives", to_string(APP_CONFIG.m_MeshShaderConfig.m_MaxMeshOutputPrimitives));
         replace(content, "$meshletLength", to_string(APP_CONFIG.m_MeshletInfo.m_MeshletLength));
 
+        replace(content, "$m_MeshletsPerTaskInvocation", to_string(APP_CONFIG.m_MeshShaderConfig.m_MeshletsPerTaskInvocation));
+
 #ifndef ENCODED_MESHLETS
         replace(content, "#define ENCODED_MESHLETS", "\n");
 #endif

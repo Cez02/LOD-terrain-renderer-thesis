@@ -72,17 +72,8 @@ layout( push_constant ) uniform constants
 
 // Task shader input
 
-
-struct MeshletDetails {
-    uint quadOffsets[32];
-    uint meshletOffset;
-    uint LODLevel;
-    uint quadCount;
-    uint padding;
-};
-
 struct Task {
-    MeshletDetails meshletDetails[66];
+    u8vec4 quadDescriptions[2049 * MESHLETS_PER_TASK_INVOCATION];
 
 
     uint   baseMeshletID;
@@ -102,15 +93,12 @@ struct Task {
 
 taskPayloadSharedEXT Task IN;
 
-
-
 // Indexing stuff
 
-uint meshletID = IN.baseMeshletID + IN.meshletDetails[gl_WorkGroupID.x].meshletOffset;
-uint localMeshletOffset = gl_WorkGroupID.x;
+uint localQuadID = gl_LocalInvocationID.x;
+uint quadID = gl_WorkGroupSize.x * gl_WorkGroupID.x + localQuadID;
+uint meshletID = IN.baseMeshletID + uint(IN.quadDescriptions[quadID].x);
 
-
-uint quadID;
 
 
 // Output
@@ -126,13 +114,19 @@ layout(location=0) out Interpolants {
 
 // Utils
 
+void decodeQuadDescription(out uint8_t meshletOffset, out uint8_t quadOffset, out uint8_t quadStride){
+    meshletOffset = IN.quadDescriptions[quadID].x;
+    quadOffset = IN.quadDescriptions[quadID].y;
+    quadStride = IN.quadDescriptions[quadID].z;
+}
+
 
 uvec2 scaledDimensions;
 
 
 void processVertex(uvec2 vertexOffset, MeshletDescription meshlet, int vertexIndexOffset, inout uint vertexCount, inout bool cull){
 
-    uint vertIndex = vertexIndexOffset + 4 * quadID;
+    uint vertIndex = vertexIndexOffset + 4 * localQuadID;
 
     uint heightmapIndex = meshlet.HeightmapDataOffset + vertexOffset.x + meshlet.Dimensions.x * vertexOffset.y;
     float height = float(int(heightmapData.m_Heights[heightmapIndex]));
@@ -159,21 +153,35 @@ void processVertex(uvec2 vertexOffset, MeshletDescription meshlet, int vertexInd
 
 void main() {
 
+/*
+    gl_PrimitiveTriangleIndicesEXT[0] = uvec3(0, 1, 2);
 
-    quadID = gl_LocalInvocationID.x;
+    gl_MeshVerticesEXT[0].gl_Position = vec4(0, 1, 0, 1);
+    gl_MeshVerticesEXT[1].gl_Position = vec4(1, 1, 0, 1);
+    gl_MeshVerticesEXT[2].gl_Position = vec4(0, 1, 1, 1);
+
+    SetMeshOutputsEXT(3, 1);
+
+    return;
+    */
+
+
     primCounter = 0;
     meshShaderInvocations = 0;
 
-    bool skip = quadID > IN.meshletDetails[localMeshletOffset].quadCount;
+    bool skip = quadID > IN.quadCount;
 
 
     if(skip){
         return;
     }
 
-    quadID = min(quadID, IN.meshletDetails[localMeshletOffset].quadCount - 1);
 
-    SetMeshOutputsEXT(4 * IN.meshletDetails[localMeshletOffset].quadCount, 2 * IN.meshletDetails[localMeshletOffset].quadCount);
+    quadID = min(quadID, IN.quadCount - 1);
+
+    uint workGroupQuadCount = min(32, IN.quadCount - gl_WorkGroupID.x * 32);
+
+    SetMeshOutputsEXT(4 * workGroupQuadCount, 2 * workGroupQuadCount);
 
     memoryBarrierShared();
     barrier();
@@ -181,40 +189,52 @@ void main() {
     atomicAdd(meshShaderInvocations, 1);
 
 
+
     // Grab quad data
 
     MeshletDescription thisMeshlet = meshletDescriptions.descriptions[meshletID];
 
-    uvec2 quadOffset = uvec2(IN.meshletDetails[localMeshletOffset].quadOffsets[quadID] % thisMeshlet.Dimensions.x, IN.meshletDetails[localMeshletOffset].quadOffsets[quadID] / thisMeshlet.Dimensions.x);
+    uint8_t meshletOffset, quadOffset, quadStride;
+    decodeQuadDescription(meshletOffset, quadOffset, quadStride);
 
-    uint quadSize = IN.meshletDetails[localMeshletOffset].LODLevel;
+
+    uvec2 quadCoords = uvec2(quadOffset % thisMeshlet.Dimensions.x, quadOffset / thisMeshlet.Dimensions.x);
+
+
+    gl_PrimitiveTriangleIndicesEXT[0] = uvec3(0, 1, 2);
+
+    gl_MeshVerticesEXT[0].gl_Position = vec4(meshletOffset, quadOffset, quadStride, 1);
+    gl_MeshVerticesEXT[1].gl_Position = vec4(1, 1, 0, 1);
+    gl_MeshVerticesEXT[2].gl_Position = vec4(0, 1, 1, 1);
+
 
 
     uint vertCount = 0;
     uint primCount = 2;
 
+
     // Create vertices
     bool cull = true;
 
-    processVertex(quadOffset,                               thisMeshlet, 0, vertCount, cull);
-    processVertex(quadOffset + uvec2(quadSize, 0),          thisMeshlet, 1, vertCount, cull);
-    processVertex(quadOffset + uvec2(0, quadSize),          thisMeshlet, 2, vertCount, cull);
-    processVertex(quadOffset + uvec2(quadSize, quadSize),   thisMeshlet, 3, vertCount, cull);
+    processVertex(quadCoords,                               thisMeshlet, 0, vertCount, cull);
+    processVertex(quadCoords + uvec2(quadStride, 0),          thisMeshlet, 1, vertCount, cull);
+    processVertex(quadCoords + uvec2(0, quadStride),          thisMeshlet, 2, vertCount, cull);
+    processVertex(quadCoords + uvec2(quadStride, quadStride),   thisMeshlet, 3, vertCount, cull);
 
 
     // Add primitives
     uvec4 verts = uvec4( 0, 1, 2, 3 );
 
-    verts += uvec4(1, 1, 1, 1) * 4 * quadID;
+    verts += uvec4(1, 1, 1, 1) * 4 * localQuadID;
 
-    gl_PrimitiveTriangleIndicesEXT[2*quadID] = uvec3(verts.y, verts.z, verts.x);
-    gl_PrimitiveTriangleIndicesEXT[2*quadID + 1] = uvec3(verts.z, verts.y, verts.w);
+    gl_PrimitiveTriangleIndicesEXT[2*localQuadID] = uvec3(verts.y, verts.z, verts.x);
+    gl_PrimitiveTriangleIndicesEXT[2*localQuadID + 1] = uvec3(verts.z, verts.y, verts.w);
 
-    gl_MeshPrimitivesEXT[2*quadID].gl_CullPrimitiveEXT = cull;
-    gl_MeshPrimitivesEXT[2*quadID + 1].gl_CullPrimitiveEXT = cull;
+    gl_MeshPrimitivesEXT[2*localQuadID].gl_CullPrimitiveEXT = cull;
+    gl_MeshPrimitivesEXT[2*localQuadID + 1].gl_CullPrimitiveEXT = cull;
 
-    gl_MeshPrimitivesEXT[2*quadID].gl_PrimitiveID = int(meshletID * 64 + 2*quadID);
-    gl_MeshPrimitivesEXT[2*quadID + 1].gl_PrimitiveID = int(meshletID * 64 + 2*quadID + 1);
+    gl_MeshPrimitivesEXT[2*localQuadID].gl_PrimitiveID = int(meshletID * 64 + 2*localQuadID);
+    gl_MeshPrimitivesEXT[2*localQuadID + 1].gl_PrimitiveID = int(meshletID * 64 + 2*localQuadID + 1);
 
 
 
