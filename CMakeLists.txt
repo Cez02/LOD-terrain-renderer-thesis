@@ -10,12 +10,8 @@ add_executable(terrain_renderer)
 add_subdirectory(third-party)
 
 find_package(glfw3 REQUIRED)
-find_package(Vulkan REQUIRED COMPONENTS shaderc_combined SPIRV-Tools glslang glslangValidator)
+find_package(Vulkan REQUIRED)
 find_package(glm REQUIRED)
-
-set(SHADERC_LIBS
-        shaderc_combined
-)
 
 include(shaders/CMakeLists.txt)
 
@@ -27,8 +23,7 @@ target_compile_definitions(terrain_renderer
 target_link_libraries(terrain_renderer
     PUBLIC
         glfw
-        ${SHADERC_LIBS}
-        ${Vulkan_LIBRARIES}
+        vulkan
 )
 
 target_include_directories(terrain_renderer
