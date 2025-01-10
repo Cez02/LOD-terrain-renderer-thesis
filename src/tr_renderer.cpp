@@ -1300,9 +1300,11 @@ void Renderer::createRenderStatisticsBuffer()
 
 void Renderer::initImgui()
 {
+    log("Creating ImGui context.");
     ImGui::CreateContext();
     ImGui::GetIO().ConfigFlags = ImGuiConfigFlags_NavEnableKeyboard;
 
+    log("Initializing ImGui for Vulkan.");
     ImGui_ImplGlfw_InitForVulkan(m_AppWindow->getGLFWWindow(), true);
 
     ImGui_ImplVulkan_InitInfo initInfo{};
@@ -1315,7 +1317,11 @@ void Renderer::initImgui()
     initInfo.Queue = m_GraphicsQueue;
     initInfo.MinImageCount = MAX_FRAMES_IN_FLIGHT;
     initInfo.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
+
+    log("Final Vulkan init.");
+
     ImGui_ImplVulkan_Init(&initInfo);
+    log("ImGui Vulkan font creation.");
 
     ImGui_ImplVulkan_CreateFontsTexture();
 }
