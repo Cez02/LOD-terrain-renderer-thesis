@@ -92,8 +92,9 @@ uint LOD_LEVEL;
 
 
 struct Task {
-    // meshlet info buffer offset, 
+    //     (meshletInfoBufferOffset, meshletCount)
     u8vec2 meshShaderProcessingUnits[MESHLETS_PER_TASK_INVOCATION * MAX_PREFERRED_TASK_WORK_GROUP_INVOCATIONS];
+    //     (meshletDelta, LODLevel)
     u8vec2 meshletInfoBuffer[MESHLETS_PER_TASK_INVOCATION * MAX_PREFERRED_TASK_WORK_GROUP_INVOCATIONS];
 
 
@@ -127,6 +128,9 @@ vec3 generalMeshletPosition(MeshletDescription meshlet) {
 
 // Core logic
 
+shared uint localMeshletInfoBuffers[4][MESHLETS_PER_TASK_INVOCATION * MAX_PREFERRED_TASK_WORK_GROUP_INVOCATIONS];
+shared uint meshletCounterPerLOD[4];
+
 shared uint meshletCounter;
 shared uint meshShaderProcessingUnitCounter;
 
@@ -139,6 +143,10 @@ void main() {
     meshShaderProcessingUnitCounter = 0;
     workgroupQuadCount = 0;
 
+    meshletCounterPerLOD[0] = 0;
+    meshletCounterPerLOD[1] = 0;
+    meshletCounterPerLOD[2] = 0;
+    meshletCounterPerLOD[3] = 0;
 
     OUT.heightmap_length = PushConstants.HeightmapLength;
     OUT.Longitude = PushConstants.Longitude;
@@ -187,7 +195,8 @@ void main() {
         vec3 meshletPos = generalMeshletPosition(thisMeshlet);
         float dist = length(meshletPos - OUT.observatorPosition);
 
-        LOD_LEVEL = 1 << int(clamp(dist, 0, 800) / 250);
+        uint lod = int(clamp(dist, 0, 800) / 250);
+        LOD_LEVEL = 1 << lod;
         LOD_LEVEL = clamp(LOD_LEVEL, 1, 8);
         //LOD_LEVEL = 1;
 
@@ -195,11 +204,10 @@ void main() {
 
         // build LOD mesh
 
-        uint meshletOffset = atomicAdd(meshletCounter, int(!skip));
+        uint meshletOffset = atomicAdd(meshletCounterPerLOD[lod], int(!skip));
 
         if(!skip){
-            OUT.meshletInfoBuffer[meshletOffset].x = uint8_t(gl_LocalInvocationID.x * MESHLETS_PER_TASK_INVOCATION + localMeshletOffset);
-            OUT.meshletInfoBuffer[meshletOffset].y = uint8_t(LOD_LEVEL);
+            localMeshletInfoBuffers[lod][meshletOffset] = uint8_t(gl_LocalInvocationID.x * MESHLETS_PER_TASK_INVOCATION + localMeshletOffset);
         }
 
     }
@@ -217,16 +225,38 @@ void main() {
         OUT.globalMeshletCount = PushConstants.MeshletCount;
 
 
+        // sort the meshlet info buffer
+
         for(uint8_t lod = 0; lod < 4; lod++){
-            for(uint8_t meshlet = 0; meshlet < meshletCounter; meshlet++){
-
-                if(OUT.meshletInfoBuffer[meshlet].y != (1 << lod))
-                    continue;
-
-                OUT.meshShaderProcessingUnits[meshShaderProcessingUnitCounter]
-                meshShaderProcessingUnitCounter
-
+            for(uint8_t localMeshletDelta = 0; localMeshletDelta < meshletCounterPerLOD[lod]; localMeshletDelta++){
                 
+                uint meshletBufferDelta = atomicAdd(meshletCounter, 1);
+
+                OUT.meshletInfoBuffer[meshletBufferDelta] = u8vec2(uint8_t(localMeshletInfoBuffers[lod][localMeshletDelta]), uint8_t(1 << lod));
+
+
+                // check if MSPU has the same LOD as this meshlet
+
+                if (OUT.meshShaderProcessingUnits[meshShaderProcessingUnitCounter].y != 0 &&
+                    OUT.meshletInfoBuffer[OUT.meshShaderProcessingUnits[meshShaderProcessingUnitCounter].x].y != (1 << lod)){
+
+                    atomicAdd(meshShaderProcessingUnitCounter, 1);
+                }
+
+                // add the meshlet to the MSPU
+                OUT.meshShaderProcessingUnits[meshShaderProcessingUnitCounter].meshletCount++;
+
+
+                // check if MSPU is full
+                // lod = 0 -> 1 = 2^0
+                // lod = 1 -> 4 = 2^2
+                // lod = 2 -> 16 = 2^4
+                // lod = 3 -> 64 = 2^6
+
+
+                if(meshShaderProcessingUnits[meshShaderProcessingUnitCounter].y == (1 << (2*lod))){
+                    atomicAdd(meshShaderProcessingUnitCounter, 1);
+                }
 
             }
 
