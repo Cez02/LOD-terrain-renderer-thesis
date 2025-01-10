@@ -375,8 +375,8 @@ bool Renderer::isDeviceSuitable(VkPhysicalDevice device) {
 
 
 
-    return deviceProperties.properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU
-           && indices.isComplete()
+    return 
+              indices.isComplete()
            && swapChainAdequate
            && extensionsSupported;
 }
@@ -467,8 +467,6 @@ void Renderer::createLogicalDevice()
 
     // Turn on mesh shader features
     VkPhysicalDeviceMeshShaderFeaturesEXT meshShaderFeatures { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT };
-    meshShaderFeatures.meshShader = true;
-    meshShaderFeatures.taskShader = true;
 
     features13.pNext = &meshShaderFeatures;
 
@@ -492,27 +490,9 @@ void Renderer::createLogicalDevice()
 
     // set options
 
-    meshShaderFeatures.meshShaderQueries = true;
-    meshShaderFeatures.multiviewMeshShader = false;
-    meshShaderFeatures.primitiveFragmentShadingRateMeshShader = false;
-
-    primitivesGeneratedQueryFeaturesEXT.primitivesGeneratedQuery = true;
-
-    // features11.storageBuffer16BitAccess = true;
-
-    // storageFeatures.storageBuffer16BitAccess = true;
-
-    /*
-    if (!features11.uniformAndStorageBuffer16BitAccess)
-        logError("What the fuck?");
-    features11.uniformAndStorageBuffer16BitAccess = true;
-    */
-
-    // if (!storage16bit.storageInputOutput16)
-    // {
-    //     logError("16bit storage is not supported!");
-    // }
-
+    if(meshShaderFeatures.meshShader == VK_FALSE || meshShaderFeatures.taskShader == VK_FALSE){
+        throw std::runtime_error("Mesh shaders are not supported on this physical device!");
+    }
 
 
     log("\tCreating device");
@@ -803,9 +783,6 @@ void Renderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
     if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS) {
         throw std::runtime_error("failed to begin recording command buffer!");
     }
-
-    // vkCmdResetQueryPool(m_CommandBuffers[m_CurrentFrame], m_QueryPool, 0, 1);
-    // vkCmdBeginQuery(m_CommandBuffers[m_CurrentFrame], m_QueryPool, 0, 0);
 
 
 
