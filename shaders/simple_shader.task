@@ -21,7 +21,7 @@
 
 #include "common.h"
 
-layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
+layout(local_size_x = MAX_PREFERRED_TASK_WORK_GROUP_INVOCATIONS, local_size_y = 1, local_size_z = 1) in;
 
 // Push constants
 
@@ -90,10 +90,12 @@ uint LOD_LEVEL;
 
 #define TASK_ITERATIONS MAX_PREFERRED_MESH_WORK_GROUP_INVOCATIONS
 
-struct Task {
-    u8vec2 meshletOffsets[128 * MESHLETS_PER_TASK_INVOCATION];
 
-    uint8_t padding[4];
+struct Task {
+    // meshlet info buffer offset, 
+    u8vec2 meshShaderProcessingUnits[MESHLETS_PER_TASK_INVOCATION * MAX_PREFERRED_TASK_WORK_GROUP_INVOCATIONS];
+    u8vec2 meshletInfoBuffer[MESHLETS_PER_TASK_INVOCATION * MAX_PREFERRED_TASK_WORK_GROUP_INVOCATIONS];
+
 
     uint   baseMeshletID;
     uint    heightmap_length;
@@ -113,23 +115,7 @@ shared uint workgroupQuadCount;
 
 // Mesh shader preparation
 
-u8vec3 encodeQuadDescription(uint8_t meshletOffset, uint8_t quadOffset, uint8_t quadStride){
-    return u8vec3(meshletOffset, quadOffset, quadStride);
-}
 
-/*
-void createQuad(uvec2 quadOffset, uint LODStride, MeshletDescription meshlet, uint meshletOffset){
-
-    bool keepQuad = meshlet.Dimensions.x > quadOffset.x + LODStride && meshlet.Dimensions.y > quadOffset.y + LODStride;
-
-    if(keepQuad){
-        uint quadDescriptionOffset = atomicAdd(workgroupQuadCount, 1);
-
-        OUT.quadDescriptions[quadDescriptionOffset] = encodeQuadDescription(uint8_t(gl_LocalInvocationID.x * MESHLETS_PER_TASK_INVOCATION + meshletOffset), uint8_t(quadOffset.x + quadOffset.y * meshlet.Dimensions.x), uint8_t(LODStride));
-
-    }
-}
-*/
 vec3 generalMeshletPosition(MeshletDescription meshlet) {
     uint heightmapIndex = meshlet.HeightmapDataOffset;
 
@@ -142,6 +128,7 @@ vec3 generalMeshletPosition(MeshletDescription meshlet) {
 // Core logic
 
 shared uint meshletCounter;
+shared uint meshShaderProcessingUnitCounter;
 
 void main() {
 
@@ -149,6 +136,7 @@ void main() {
     LOD_LEVEL = 1;
     taskShaderInvocations = 0;
     meshletCounter = 0;
+    meshShaderProcessingUnitCounter = 0;
     workgroupQuadCount = 0;
 
 
@@ -210,8 +198,8 @@ void main() {
         uint meshletOffset = atomicAdd(meshletCounter, int(!skip));
 
         if(!skip){
-            OUT.meshletOffsets[meshletOffset].x = uint8_t(gl_LocalInvocationID.x * MESHLETS_PER_TASK_INVOCATION + localMeshletOffset);
-            OUT.meshletOffsets[meshletOffset].y = uint8_t(LOD_LEVEL);
+            OUT.meshletInfoBuffer[meshletOffset].x = uint8_t(gl_LocalInvocationID.x * MESHLETS_PER_TASK_INVOCATION + localMeshletOffset);
+            OUT.meshletInfoBuffer[meshletOffset].y = uint8_t(LOD_LEVEL);
         }
 
     }
@@ -227,6 +215,29 @@ void main() {
 
         OUT.localMeshletOffsetsCount = meshletCounter;
         OUT.globalMeshletCount = PushConstants.MeshletCount;
+
+
+        for(uint8_t lod = 0; lod < 4; lod++){
+            for(uint8_t meshlet = 0; meshlet < meshletCounter; meshlet++){
+
+                if(OUT.meshletInfoBuffer[meshlet].y != (1 << lod))
+                    continue;
+
+                OUT.meshShaderProcessingUnits[meshShaderProcessingUnitCounter]
+                meshShaderProcessingUnitCounter
+
+                
+
+            }
+
+
+
+
+
+        }
+
+
+
 
         EmitMeshTasksEXT(meshletCounter / MESHLETS_PER_MESH_WORKGROUP, 1, 1);
     }
