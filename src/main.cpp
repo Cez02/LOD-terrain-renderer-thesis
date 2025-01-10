@@ -74,8 +74,11 @@ void setup(Renderer *mainRenderer, Window *mainWindow, GUIHandler *guiHandler, T
             scene->getHeightmaps().emplace_back(dir.path());
     }
 
+    log("Initializing vk scene elements.");
 
     mainRenderer->initVKSceneElements(*scene);
+
+    log("Finished setting up Vulkan.");
 
     // scene.getCamera() = Camera();
     // scene.getCamera().m_Position = glm::vec3(8359, 33461, 36210);
@@ -87,6 +90,7 @@ void setup(Renderer *mainRenderer, Window *mainWindow, GUIHandler *guiHandler, T
 
     // load assets
 
+    log("Loading compass image.");
     bool ret = LoadTextureFromFile(
             "assets/Compass.png",
             compassTexture,
@@ -95,6 +99,12 @@ void setup(Renderer *mainRenderer, Window *mainWindow, GUIHandler *guiHandler, T
             mainRenderer->m_CommandPool,
             mainRenderer->m_GraphicsQueue
     );
+
+    if (!ret)
+    {
+        log("Failed to load the compass image asset.");
+        exit(1);
+    }
 
     guiHandler->m_GUIData.m_CompassTexture = compassTexture;
 

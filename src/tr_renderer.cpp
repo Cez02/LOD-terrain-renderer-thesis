@@ -470,11 +470,8 @@ void Renderer::createLogicalDevice()
 
     features13.pNext = &meshShaderFeatures;
 
-    // Turn on primitives generated queries
-    VkPhysicalDevicePrimitivesGeneratedQueryFeaturesEXT primitivesGeneratedQueryFeaturesEXT { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRIMITIVES_GENERATED_QUERY_FEATURES_EXT };
+    meshShaderFeatures.pNext = VK_NULL_HANDLE;
 
-    meshShaderFeatures.pNext = &primitivesGeneratedQueryFeaturesEXT;
-    primitivesGeneratedQueryFeaturesEXT.pNext = VK_NULL_HANDLE;
 
     /*
     VkPhysicalDevice16BitStorageFeatures storageFeatures { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_16BIT_STORAGE_FEATURES };
@@ -487,13 +484,16 @@ void Renderer::createLogicalDevice()
 
     vkGetPhysicalDeviceFeatures2(m_PhysicalDevice, &deviceFeatures);
 
+    meshShaderFeatures.primitiveFragmentShadingRateMeshShader = false;
+    meshShaderFeatures.meshShaderQueries = false;
+    meshShaderFeatures.multiviewMeshShader = false;
+
 
     // set options
 
     if(meshShaderFeatures.meshShader == VK_FALSE || meshShaderFeatures.taskShader == VK_FALSE){
         throw std::runtime_error("Mesh shaders are not supported on this physical device!");
     }
-
 
     log("\tCreating device");
 
@@ -1135,9 +1135,9 @@ void Renderer::createQueryPool()
 {
     VkQueryPoolCreateInfo queryPoolInfo{};
     queryPoolInfo.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
-    queryPoolInfo.queryType = VK_QUERY_TYPE_PRIMITIVES_GENERATED_EXT;
+    queryPoolInfo.queryType = VK_QUERY_TYPE_PIPELINE_STATISTICS;
     queryPoolInfo.queryCount = 1; // Number of queries
-    // queryPoolInfo.pipelineStatistics = VK_QUERY_PIPELINE_STATISTIC_CLIPPING_PRIMITIVES_BIT;
+    queryPoolInfo.pipelineStatistics = VK_QUERY_PIPELINE_STATISTIC_CLIPPING_PRIMITIVES_BIT;
 
     vkCreateQueryPool(m_Device, &queryPoolInfo, nullptr, &m_QueryPool);
 }
@@ -1300,9 +1300,11 @@ void Renderer::createRenderStatisticsBuffer()
 
 void Renderer::initImgui()
 {
+    log("Creating ImGui context.");
     ImGui::CreateContext();
     ImGui::GetIO().ConfigFlags = ImGuiConfigFlags_NavEnableKeyboard;
 
+    log("Initializing ImGui for Vulkan.");
     ImGui_ImplGlfw_InitForVulkan(m_AppWindow->getGLFWWindow(), true);
 
     ImGui_ImplVulkan_InitInfo initInfo{};
@@ -1315,7 +1317,11 @@ void Renderer::initImgui()
     initInfo.Queue = m_GraphicsQueue;
     initInfo.MinImageCount = MAX_FRAMES_IN_FLIGHT;
     initInfo.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
+
+    log("Final Vulkan init.");
+
     ImGui_ImplVulkan_Init(&initInfo);
+    log("ImGui Vulkan font creation.");
 
     ImGui_ImplVulkan_CreateFontsTexture();
 }
