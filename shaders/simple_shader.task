@@ -93,9 +93,11 @@ uint LOD_LEVEL;
 
 struct Task {
     //     (meshletInfoBufferOffset, meshletCount)
-    u8vec2 meshShaderProcessingUnits[MESHLETS_PER_TASK_INVOCATION * MAX_PREFERRED_TASK_WORK_GROUP_INVOCATIONS];
+    u8vec2 meshShaderProcessingUnits[MESHLETS_PER_TASK_INVOCATION * MAX_PREFERRED_TASK_WORK_GROUP_INVOCATIONS + 2];
     //     (meshletDelta, LODLevel)
-    u8vec2 meshletInfoBuffer[MESHLETS_PER_TASK_INVOCATION * MAX_PREFERRED_TASK_WORK_GROUP_INVOCATIONS];
+    u8vec2 meshletInfoBuffer[MESHLETS_PER_TASK_INVOCATION * MAX_PREFERRED_TASK_WORK_GROUP_INVOCATIONS + 2];
+
+    uint meshShaderProcessingUnitsCount, meshletInfoBufferCount;
 
 
     uint   baseMeshletID;
@@ -128,7 +130,7 @@ vec3 generalMeshletPosition(MeshletDescription meshlet) {
 
 // Core logic
 
-shared uint localMeshletInfoBuffers[4][MESHLETS_PER_TASK_INVOCATION * MAX_PREFERRED_TASK_WORK_GROUP_INVOCATIONS];
+shared uint localMeshletInfoBuffers[4][MESHLETS_PER_TASK_INVOCATION * MAX_PREFERRED_TASK_WORK_GROUP_INVOCATIONS + 2];
 shared uint meshletCounterPerLOD[4];
 
 shared uint meshletCounter;
@@ -227,10 +229,10 @@ void main() {
 
         // sort the meshlet info buffer
 
-        for(uint8_t lod = 0; lod < 4; lod++){
-            for(uint8_t localMeshletDelta = 0; localMeshletDelta < meshletCounterPerLOD[lod]; localMeshletDelta++){
+        for(uint8_t lod = uint8_t(0); lod < uint8_t(4); lod++){
+            for(uint8_t localMeshletDelta = uint8_t(0); localMeshletDelta < meshletCounterPerLOD[lod]; localMeshletDelta++){
                 
-                uint meshletBufferDelta = atomicAdd(meshletCounter, 1);
+                uint8_t meshletBufferDelta = uint8_t(atomicAdd(meshletCounter, 1));
 
                 OUT.meshletInfoBuffer[meshletBufferDelta] = u8vec2(uint8_t(localMeshletInfoBuffers[lod][localMeshletDelta]), uint8_t(1 << lod));
 
@@ -241,11 +243,11 @@ void main() {
                     OUT.meshletInfoBuffer[OUT.meshShaderProcessingUnits[meshShaderProcessingUnitCounter].x].y != (1 << lod)){
 
                     atomicAdd(meshShaderProcessingUnitCounter, 1);
+                    OUT.meshShaderProcessingUnits[meshShaderProcessingUnitCounter].x = meshletBufferDelta;
                 }
 
                 // add the meshlet to the MSPU
-                OUT.meshShaderProcessingUnits[meshShaderProcessingUnitCounter].meshletCount++;
-
+                OUT.meshShaderProcessingUnits[meshShaderProcessingUnitCounter].y++;
 
                 // check if MSPU is full
                 // lod = 0 -> 1 = 2^0
@@ -253,23 +255,17 @@ void main() {
                 // lod = 2 -> 16 = 2^4
                 // lod = 3 -> 64 = 2^6
 
-
-                if(meshShaderProcessingUnits[meshShaderProcessingUnitCounter].y == (1 << (2*lod))){
+                if(OUT.meshShaderProcessingUnits[meshShaderProcessingUnitCounter].y == (1 << (2*lod))){
                     atomicAdd(meshShaderProcessingUnitCounter, 1);
+                    OUT.meshShaderProcessingUnits[meshShaderProcessingUnitCounter].x = uint8_t(meshletBufferDelta + 1);
                 }
-
             }
-
-
-
-
-
         }
 
+        OUT.meshShaderProcessingUnitsCount = meshShaderProcessingUnitCounter;
+        OUT.meshletInfoBufferCount
 
-
-
-        EmitMeshTasksEXT(meshletCounter / MESHLETS_PER_MESH_WORKGROUP, 1, 1);
+        EmitMeshTasksEXT(meshShaderProcessingUnitCounter, 1, 1);
     }
 
 

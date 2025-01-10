@@ -82,9 +82,11 @@ layout( push_constant ) uniform constants
 // Task shader input
 
 struct Task {
-    u8vec2 meshletOffsets[128 * MESHLETS_PER_TASK_INVOCATION];
+    //     (meshletInfoBufferOffset, meshletCount)
+    u8vec2 meshShaderProcessingUnits[MESHLETS_PER_TASK_INVOCATION * MAX_PREFERRED_TASK_WORK_GROUP_INVOCATIONS + 2];
+    //     (meshletDelta, LODLevel)
+    u8vec2 meshletInfoBuffer[MESHLETS_PER_TASK_INVOCATION * MAX_PREFERRED_TASK_WORK_GROUP_INVOCATIONS + 2];
 
-    uint8_t padding[4];
 
     uint   baseMeshletID;
     uint    heightmap_length;
@@ -120,6 +122,7 @@ layout(location=0) out Interpolants {
 
 // Utils
 
+/*
 void processVertex(uvec2 vertexOffset, uint meshletID, MeshletDescription meshlet, uint vertexIndexOffset, inout bool cull, inout uint vertIndexHolder){
     vertexOffset.x = min(vertexOffset.x, meshlet.Dimensions.x - 1);
     vertexOffset.y = min(vertexOffset.y, meshlet.Dimensions.y - 1);
@@ -144,11 +147,11 @@ void processVertex(uvec2 vertexOffset, uint meshletID, MeshletDescription meshle
     float observerHorizonDistance = observerHorizonDistance(IN.observatorPosition);
     cull = cull && (observerHorizonDistance < length(vertA - IN.observatorPosition));
 }
-
+*/
 
 void main() {
 
-/*
+
     gl_PrimitiveTriangleIndicesEXT[0] = uvec3(0, 1, 2);
 
     gl_MeshVerticesEXT[0].gl_Position = vec4(0, 1, 0, 1);
@@ -158,9 +161,9 @@ void main() {
     SetMeshOutputsEXT(3, 1);
 
     return;
-*/
 
 
+/*
     primCounter = 0;
     meshShaderInvocations = 0;
 
@@ -244,4 +247,5 @@ void main() {
         atomicAdd(renderStatistics.statistics.PrimitiveCount, primCounter);
         atomicAdd(renderStatistics.statistics.MeshShaderInvocations, meshShaderInvocations);
     }
+    */
 }
