@@ -375,8 +375,8 @@ bool Renderer::isDeviceSuitable(VkPhysicalDevice device) {
 
 
 
-    return deviceProperties.properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU
-           && indices.isComplete()
+    return 
+              indices.isComplete()
            && swapChainAdequate
            && extensionsSupported;
 }
