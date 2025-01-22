@@ -148,9 +148,9 @@ public:
 
     VkShaderModule createShaderModule(const std::vector<char>& code);
 
-    VkCommandBufferBeginInfo command_buffer_begin_info(VkCommandBufferUsageFlags flags /*= 0*/);
-    VkSubmitInfo submit_info(VkCommandBuffer* cmd);
-    void immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function);
+    VkCommandBufferBeginInfo commandBufferBeginInfo(VkCommandBufferUsageFlags flags /*= 0*/);
+    VkSubmitInfo submitInfo(VkCommandBuffer* cmd);
+    void immediateSubmit(std::function<void(VkCommandBuffer cmd)>&& function);
 
     void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex, SceneData &scene);
 

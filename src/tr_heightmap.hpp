@@ -12,9 +12,10 @@ struct HeightmapPushConstantData {
     glm::vec3 ObserverLookingDirection;
     uint16_t MeshletCount;
     uint16_t HeightmapLength;
-    uint16_t BaseMeshletOffset;
+    uint BaseMeshletOffset;
     float Longitude;
     float Latitude;
+    float fogDistance = 1000;
     uint8_t LODLevel;
 };
 

@@ -12,9 +12,11 @@
 
 #include "tr_texture.h"
 
+#include <common.h>
+
 using namespace std;
 
-glm::uvec2 parseGeoCoordinates(std::string input)
+glm::vec3 parseGeoCoordinates(std::string input)
 {
     glm::vec2 coords;
 
@@ -29,29 +31,29 @@ glm::uvec2 parseGeoCoordinates(std::string input)
     coords.x /= 180;
     coords.x *= glm::pi<float>();
 
-    return coords;
+    return polarToCartesian(coords.y, coords.x, 100);
 }
-
-/*
- * Dodać wysokość nad poziomem morza
- *
- *
- */
 
 struct StartupOptions
 {
-
+    glm::vec3 m_ObserverStartingPosition = glm::vec3(8595, 33784, 35878);
 };
 
 void parseOpts(int argc, char **argv, StartupOptions &opts)
 {
+    log("Parsing " + to_string(argc) + " opts.");
+
     for (int i = 0; i<argc; i++)
     {
         std::string opt = std::string(argv[i]);
 
+        log("Checking option " + opt);
+        log(to_string(opt.compare("--starting-position")));
+
         if (opt.compare("--starting-position") == 0)
         {
-
+            opts.m_ObserverStartingPosition = parseGeoCoordinates(std::string(argv[i + 1]));
+            log(glm::to_string(opts.m_ObserverStartingPosition));
         }
     }
 }
@@ -79,10 +81,6 @@ void setup(Renderer *mainRenderer, Window *mainWindow, GUIHandler *guiHandler, T
     mainRenderer->initVKSceneElements(*scene);
 
     log("Finished setting up Vulkan.");
-
-    // scene.getCamera() = Camera();
-    // scene.getCamera().m_Position = glm::vec3(8359, 33461, 36210);
-    // scene.getCamera().m_Rotation = glm::quat(glm::vec3(0, 0, 0));
 
     mainRenderer->m_GUIHandler = guiHandler;
 
@@ -133,6 +131,8 @@ int main(int argc, char **argv){
     Texture my_texture;
     SceneData scene;
 
+    mainRenderer.m_Camera.m_Position = opts.m_ObserverStartingPosition;
+
     std::thread worker_thread(setup, &mainRenderer, &mainWindow, &guiHandler, &my_texture, &scene);
 
 
@@ -152,9 +152,7 @@ int main(int argc, char **argv){
 
         /* Handle logic */
 
-        // log("Receiving input");
-
-        if (!mainRenderer.m_RendererReady)
+        if (!mainRenderer.m_RendererReady) // preparing heightmaps
         {
             if (glm::abs(dotCounter - glfwGetTime()) > 1.0f)
             {

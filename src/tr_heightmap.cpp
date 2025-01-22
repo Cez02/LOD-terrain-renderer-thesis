@@ -271,33 +271,16 @@ void Heightmap::Draw(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLay
     data.ObservatorPosition = observatorPosition;
     data.ObserverLookingDirection = Camera::instance->getForwardVector();
 
-    uint maxTasksEmitted = 128;
-
-    int k =0;
-
-    std::map<uint, std::vector<int>> meshletsByLOD;
-
-    // vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_TASK_BIT_EXT, sizeof(glm::mat4), sizeof(HeightmapPushConstantData), &data);
-    // vkCmdDrawMeshTasksEXT(commandBuffer, m_Meshlets.size() / (maxTasksEmitted), 1, 1);
+    uint maxTasksEmitted = 1;
 
     for(int i = 0; i<m_Meshlets.size();) {
         data.BaseMeshletOffset = i;
 
         vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_TASK_BIT_EXT, sizeof(glm::mat4), sizeof(HeightmapPushConstantData), &data);
 
-        uint workgroupsToCreate = m_Meshlets.size() / (APP_CONFIG.m_MeshShaderConfig.m_MaxPreferredTaskWorkGroupInvocations * APP_CONFIG.m_MeshShaderConfig.m_MeshletsPerTaskInvocation);
+        vkCmdDrawMeshTasksEXT(commandBuffer, maxTasksEmitted, 1, 1);
 
-        workgroupsToCreate += (m_Meshlets.size() % (APP_CONFIG.m_MeshShaderConfig.m_MaxPreferredTaskWorkGroupInvocations * APP_CONFIG.m_MeshShaderConfig.m_MeshletsPerTaskInvocation)) > 0;
-
-        vkCmdDrawMeshTasksEXT(commandBuffer, 1, 1, 1);
-
-        // std::cout << i << " vs " << m_Meshlets.size() << " vs " << meshletsToDraw << std::endl;
-
-        i += APP_CONFIG.m_MeshShaderConfig.m_MaxPreferredTaskWorkGroupInvocations * APP_CONFIG.m_MeshShaderConfig.m_MeshletsPerTaskInvocation ;
-        k++;
-
-        // if (k ==1)
-        //     break;
+        i += maxTasksEmitted * APP_CONFIG.m_MeshShaderConfig.m_MaxPreferredTaskWorkGroupInvocations * APP_CONFIG.m_MeshShaderConfig.m_MeshletsPerTaskInvocation ;
     }
 }
 

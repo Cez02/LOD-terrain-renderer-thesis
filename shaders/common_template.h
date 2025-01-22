@@ -118,6 +118,16 @@ vec2 localPolarOffset(uvec2 offset){
     vec2 res = ((vec2)offset * PI ) * ( 1.0f / 180.0f * 1200.0f);
     return res;
 }
+
+inline vec3 vertexToPolarToCartesian(float lat, float lon){
+    vec2 res = PI / (180 * 1200) + vec2(lon, lat);
+
+    float r = 50000 + 2000 * 1 * 50000 / 6371000;
+    return vec3( r * cos(res.y) * sin(res.x),
+                 r * sin(res.y),
+                 r * cos(res.y) * cos(res.x)
+                  );
+}
 #else
 vec2 localPolarOffset(uvec2 offset){
     offset.y = 1200 - offset.y;
@@ -182,7 +192,7 @@ bool shouldCull(MeshletDescription meshletDescription, float latitude, float lon
 
     float dist = length(meshletPos - observerPosition);
 
-    return dist > 1.5f * observerHorizonDistanceCalculated || dir < 0.0f;
+    return dist > 1.5f * observerHorizonDistanceCalculated || (dir < 0.0f  && length(meshletPos - observerPosition) > 200);
 }
 
 
