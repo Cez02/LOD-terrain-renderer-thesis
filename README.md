@@ -12,6 +12,7 @@ When cloning the repo, remember to use the `--recurse-submodules` as imgui is al
 
 In order to build the project, the following are required:
 - Support for vulkan 1.3 and vulkan-sdk
+- SPIRV-Tools
 - GLFW 3
 - GLM
 
@@ -40,41 +41,3 @@ In order to use the app, traverse into the built binary directory. Next create a
 In order to set the starting coordinates of the observer, use the `--starting-position` argument along with coordinates in the same format as the naming convention of SRTM files (e.g. N42E014).
 
 To move around, use the `WASD` keys, `E` and `Q` to rotate the camera and `Spacebar` and `Left CTRL` to gain and lose altitude respectively. In order to move faster, hold the `Left Shift` key while performing the movements.
-
-
-## Structure
-
-A mesh shader workgroup consists of 64 invocations. Such workgroup is capable of rendering:
-1. 1 full-resolution meshlet
-2. 4 LOD-2 meshlets
-3. 16 LOD-4 meshlets
-4. 64 LOD-8 meshlets
-
-Since this is the case, the natural proposition is to pack the meshlets into MeshShaderProcessingUnit structs.
-
-```
-MeshShaderProcessingUnit {
-    uint8_t meshletOffsetsData
-    uint8_t meshletCount;
-}
-```
-
-This will dictate how many meshlets the mesh shader is responsible for drawing.
-
-The task shader payload will in turn look like this:
-
-```
-MeshShaderProcessingUnit meshShaderProcessingUnits[SIZE_OF_TASK_WORKGROUP * MESHLETS_PER_TASK_INVOCATION];
-u8vec2 meshletDeltas[SIZE_OF_TASK_WORKGROUP * MESHLETS_PER_TASK_INVOCATION]; // contains (delta, LODLevel)
-```
-
-
-The task shader will do the following:
-
-- Each invocation iterates over k meshlets
-    - take meshlet, decide the LOD, register the meshlet in meshletDeltas
-
-- at the end, if invocation == 0
-    - sort the meshletDeltas by decreasing LODLevel
-    - Create meshShaderProcessingUnits that abide to the capabilities of the mesh shader workgroups
-    - emit as many mesh shaders as there are meshShaderProcessingUnits
