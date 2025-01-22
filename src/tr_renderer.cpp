@@ -211,7 +211,7 @@ void Renderer::createInstance()
 }
 
 // implementation
-VkCommandBufferBeginInfo Renderer::command_buffer_begin_info(VkCommandBufferUsageFlags flags /*= 0*/)
+VkCommandBufferBeginInfo Renderer::commandBufferBeginInfo(VkCommandBufferUsageFlags flags /*= 0*/)
 {
     VkCommandBufferBeginInfo info = {};
     info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -222,7 +222,7 @@ VkCommandBufferBeginInfo Renderer::command_buffer_begin_info(VkCommandBufferUsag
     return info;
 }
 
-VkSubmitInfo Renderer::submit_info(VkCommandBuffer* cmd)
+VkSubmitInfo Renderer::submitInfo(VkCommandBuffer* cmd)
 {
     VkSubmitInfo info = {};
     info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -239,13 +239,13 @@ VkSubmitInfo Renderer::submit_info(VkCommandBuffer* cmd)
     return info;
 }
 
-void Renderer::immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function)
+void Renderer::immediateSubmit(std::function<void(VkCommandBuffer cmd)>&& function)
 {
 
 	VkCommandBuffer cmd = m_UploadContext._commandBuffer;
 
 	//begin the command buffer recording. We will use this command buffer exactly once before resetting, so we tell vulkan that
-	VkCommandBufferBeginInfo cmdBeginInfo = command_buffer_begin_info(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
+	VkCommandBufferBeginInfo cmdBeginInfo = commandBufferBeginInfo(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 
 	check_vk_result(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
 
@@ -254,7 +254,7 @@ void Renderer::immediate_submit(std::function<void(VkCommandBuffer cmd)>&& funct
 
 	check_vk_result(vkEndCommandBuffer(cmd));
 
-	VkSubmitInfo submit = submit_info(&cmd);
+	VkSubmitInfo submit = submitInfo(&cmd);
 
 
 	//submit command buffer to the queue and execute it.

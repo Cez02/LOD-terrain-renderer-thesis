@@ -62,7 +62,6 @@ layout(std430, binding = 2) writeonly buffer RenderStats {
     RenderStatistics statistics;
 } renderStatistics;
 
-shared uint primCounter;
 shared uint meshShaderInvocations;
 
 
@@ -83,13 +82,15 @@ layout( push_constant ) uniform constants
 
 struct Task {
     //     (meshletInfoBufferOffset, meshletCount)
-    u8vec2 meshShaderProcessingUnits[MESHLETS_PER_TASK_INVOCATION * MAX_PREFERRED_TASK_WORK_GROUP_INVOCATIONS + 2];
+    u16vec2 meshletClusterDescriptions[MESHLETS_PER_TASK_INVOCATION * MAX_PREFERRED_TASK_WORK_GROUP_INVOCATIONS + 2];
     //     (meshletDelta, LODLevel)
-    u8vec2 meshletInfoBuffer[MESHLETS_PER_TASK_INVOCATION * MAX_PREFERRED_TASK_WORK_GROUP_INVOCATIONS + 2];
+    u16vec2 meshletInfoBuffer[MESHLETS_PER_TASK_INVOCATION * MAX_PREFERRED_TASK_WORK_GROUP_INVOCATIONS + 2];
 
+    uint meshletClusterDescriptionsCount;
+    uint meshletInfoBufferCount;
 
     uint   baseMeshletID;
-    uint    heightmap_length;
+    uint    heightmapLength;
 
     float Longitude;
     float Latitude;
@@ -97,15 +98,25 @@ struct Task {
     vec3 observatorPosition;
 
     uint globalMeshletCount, localMeshletOffsetsCount;
-
 };
 
 taskPayloadSharedEXT Task IN;
 
 // Indexing stuff
 
-uint quadID = gl_LocalInvocationID.x;
-uint localMeshletOffsetBaseID = MESHLETS_PER_MESH_WORKGROUP * gl_WorkGroupID.x;
+uint meshletClusterDescriptionOffset = gl_WorkGroupID.x;
+
+uint localMeshletOffset = 0;
+uint meshletTaskBufferOffset = 0;
+uint globalMeshletID = 0;
+
+
+uint quadID;
+
+// General data
+
+uint LOD_LEVEL = 1;
+u16vec2 thisMeshletClusterDescription = u16vec2(0, 0);
 
 
 
@@ -115,137 +126,131 @@ layout(location=0) out Interpolants {
     vec3  wPos;
     float   wHeight;
     flat  uint meshletID;
-    flat uint laneID;
-    flat float DistFromObservator;
 } OUT[];
 
 
 // Utils
 
-/*
-void processVertex(uvec2 vertexOffset, uint meshletID, MeshletDescription meshlet, uint vertexIndexOffset, inout bool cull, inout uint vertIndexHolder){
-    vertexOffset.x = min(vertexOffset.x, meshlet.Dimensions.x - 1);
-    vertexOffset.y = min(vertexOffset.y, meshlet.Dimensions.y - 1);
 
-    vertIndexHolder = vertexOffset.x + vertexOffset.y * meshlet.Dimensions.x + vertexIndexOffset;
+void processVertex(uvec2 vertexOffset, uint meshletID, MeshletDescription meshlet, uint vertexIndexOffset, inout bool cull, uint vertIndex){
 
     uint heightmapIndex = meshlet.HeightmapDataOffset + vertexOffset.x + meshlet.Dimensions.x * vertexOffset.y;
     float height = float(int(heightmapData.m_Heights[heightmapIndex]));
 
-    vec3 vertA = vertexToPolarToCartesian(meshlet.Offset + vertexOffset, IN.Latitude, IN.Longitude, height);
+    vec3 vertPos = vertexToPolarToCartesian(meshlet.Offset + vertexOffset, IN.Latitude, IN.Longitude, height);
 
-    // Interpolants
-    OUT[vertIndexHolder].wPos = vertA;
-    OUT[vertIndexHolder].wHeight = height;
-    OUT[vertIndexHolder].DistFromObservator = length(vertA - IN.observatorPosition);
-    OUT[vertIndexHolder].meshletID = meshletID;
-    OUT[vertIndexHolder].laneID = 0;
+    OUT[vertIndex].wPos = vertPos;
+    OUT[vertIndex].wHeight = height;
 
-
-    gl_MeshVerticesEXT[vertIndexHolder].gl_Position = PushConstants.transform_matrix * vec4(vertA, 1.0);
+    gl_MeshVerticesEXT[vertIndex].gl_Position = PushConstants.transform_matrix * vec4(vertPos, 1.0);
 
     float observerHorizonDistance = observerHorizonDistance(IN.observatorPosition);
-    cull = cull && (observerHorizonDistance < length(vertA - IN.observatorPosition));
+    cull = cull && (observerHorizonDistance < length(vertPos - IN.observatorPosition));
 }
-*/
+
+shared uint vertCount;
+shared uint primCount;
 
 void main() {
 
-
-    gl_PrimitiveTriangleIndicesEXT[0] = uvec3(0, 1, 2);
-
-    gl_MeshVerticesEXT[0].gl_Position = vec4(0, 1, 0, 1);
-    gl_MeshVerticesEXT[1].gl_Position = vec4(1, 1, 0, 1);
-    gl_MeshVerticesEXT[2].gl_Position = vec4(0, 1, 1, 1);
-
-    SetMeshOutputsEXT(3, 1);
-
-    return;
-
-
-/*
-    primCounter = 0;
+    primCount = 0;
+    vertCount = 0;
     meshShaderInvocations = 0;
-
-    // check meshlet IDs are correct
-
-    bool skip = localMeshletOffsetBaseID >= IN.localMeshletOffsetsCount;
-
-    if(skip){
-        return;
-    }
-
-    // we change quadID to a vertex index offset in the meshlet
-    // quadIDs go from 0 to 63.
-    quadID =
-        quadID % (MESHLET_LENGTH - 1) + (quadID / (MESHLET_LENGTH - 1)) * MESHLET_LENGTH;
 
 
     memoryBarrierShared();
     barrier();
+
+
+    bool skip = meshletClusterDescriptionOffset >= IN.meshletClusterDescriptionsCount;
+
+    thisMeshletClusterDescription = IN.meshletClusterDescriptions[meshletClusterDescriptionOffset];
+
+    LOD_LEVEL = IN.meshletInfoBuffer[thisMeshletClusterDescription.x].y;
+
+
+
+
+    // we jump the meshletClusters meshlets according to the LOD.
+    // LOD-8 = every invocation ID
+    // LOD-4 = every 4 invocation IDs...
+    // LOD-2 = every 16 invocation IDs...
+    // LOD-1 = every 64 invocation IDs...
+
+    uint invocJump = ( 1 << (2 * (3 - int(log2(float(LOD_LEVEL))))) );
+
+    localMeshletOffset = uint(gl_LocalInvocationID.x / invocJump);
+    meshletTaskBufferOffset = uint(thisMeshletClusterDescription.x) + localMeshletOffset;
+    quadID = gl_LocalInvocationID.x % invocJump;
+
+
+    skip = skip || (localMeshletOffset >= thisMeshletClusterDescription.y);
+
+    globalMeshletID = IN.baseMeshletID + uint(IN.meshletInfoBuffer[meshletTaskBufferOffset].x);
+
+    skip = skip || (globalMeshletID >= IN.globalMeshletCount);
+
 
     atomicAdd(meshShaderInvocations, 1);
 
-    UNROLL_LOOP
-    for(uint i = 0; i < MESHLETS_PER_MESH_WORKGROUP; i++){
-        uint meshletID = IN.baseMeshletID + IN.meshletOffsets[localMeshletOffsetBaseID + i].x;
 
-        MeshletDescription thisMeshlet = meshletDescriptions.descriptions[min(meshletID, IN.globalMeshletCount - 1)];
+    // Quad calculations
 
-        skip = meshletID > IN.globalMeshletCount;
+    uint lodSideLength = (MESHLET_LENGTH - 1) / LOD_LEVEL;
+    uvec2 quadOffset = uvec2 (quadID % (lodSideLength), (quadID / (lodSideLength)));
 
 
+    MeshletDescription thisMeshlet = meshletDescriptions.descriptions[globalMeshletID];
 
-        // create vertices
-        uvec2 quadCoords = uvec2(quadID % thisMeshlet.Dimensions.x, quadID / thisMeshlet.Dimensions.x);
 
-        bool cull = true;
+    bool cull = true;
 
-        uint8_t quadStride = IN.meshletOffsets[localMeshletOffsetBaseID + i].y;
 
-        uint meshletVertexOffset = i * MESHLET_LENGTH * MESHLET_LENGTH;
+    if(!skip){
+        // Prepare vertices
 
-        uint vertAIndex = 0, vertBIndex = 0, vertCIndex = 0, vertDIndex = 0;
+        uint vertAIndex = atomicAdd(vertCount, 4);
+        uint    vertBIndex = vertAIndex + 1;
+        uint    vertCIndex = vertAIndex + 2;
+        uint    vertDIndex = vertAIndex + 3;
 
-        processVertex(quadCoords,                                   meshletID, thisMeshlet, meshletVertexOffset, cull, vertAIndex);
-        processVertex(quadCoords + uvec2(quadStride, 0),            meshletID, thisMeshlet, meshletVertexOffset, cull, vertBIndex);
-        processVertex(quadCoords + uvec2(0, quadStride),            meshletID, thisMeshlet, meshletVertexOffset, cull, vertCIndex);
-        processVertex(quadCoords + uvec2(quadStride, quadStride),   meshletID, thisMeshlet, meshletVertexOffset, cull, vertDIndex);
+        uint quadStride = LOD_LEVEL;
 
-        skip = skip ||
-            ( quadCoords.x % quadStride > 0 || quadCoords.y % quadStride > 0 ||
-              quadCoords.x + quadStride >= MESHLET_LENGTH || quadCoords.y + quadStride >= MESHLET_LENGTH );
+        processVertex(LOD_LEVEL * quadOffset,                                   globalMeshletID, thisMeshlet, 0, cull, vertAIndex);
+        processVertex(LOD_LEVEL * quadOffset + uvec2(quadStride, 0),            globalMeshletID, thisMeshlet, 0, cull, vertBIndex);
+        processVertex(LOD_LEVEL * quadOffset + uvec2(0, quadStride),            globalMeshletID, thisMeshlet, 0, cull, vertCIndex);
+        processVertex(LOD_LEVEL * quadOffset + uvec2(quadStride, quadStride),   globalMeshletID, thisMeshlet, 0, cull, vertDIndex);
 
-        // Add primitives
-        uvec4 verts = uvec4( vertAIndex, vertBIndex, vertCIndex, vertDIndex );
+        OUT[vertAIndex].meshletID = globalMeshletID;
+        OUT[vertBIndex].meshletID = globalMeshletID;
+        OUT[vertCIndex].meshletID = globalMeshletID;
+        OUT[vertDIndex].meshletID = globalMeshletID;
 
-        if(!skip){
-            uint primID = atomicAdd(primCounter, 2);
+        // Prepare primitives
 
-            gl_PrimitiveTriangleIndicesEXT[primID] = uvec3(verts.y, verts.z, verts.x);
-            gl_PrimitiveTriangleIndicesEXT[primID + 1] = uvec3(verts.z, verts.y, verts.w);
+        uint primID = atomicAdd(primCount, 2);
 
-            gl_MeshPrimitivesEXT[primID].gl_CullPrimitiveEXT = cull;
-            gl_MeshPrimitivesEXT[primID + 1].gl_CullPrimitiveEXT = cull;
+        uvec4 verts = uvec4(vertAIndex, vertBIndex, vertCIndex, vertDIndex);
 
-            gl_MeshPrimitivesEXT[primID].gl_PrimitiveID = int(2*quadID);
-            gl_MeshPrimitivesEXT[primID + 1].gl_PrimitiveID = int(2*quadID + 1);
-        }
+        gl_PrimitiveTriangleIndicesEXT[primID] = uvec3(verts.y, verts.z, verts.x);
+        gl_PrimitiveTriangleIndicesEXT[primID + 1] = uvec3(verts.z, verts.y, verts.w);
+
+        gl_MeshPrimitivesEXT[primID].gl_CullPrimitiveEXT = cull;
+        gl_MeshPrimitivesEXT[primID + 1].gl_CullPrimitiveEXT = cull;
+
+        gl_MeshPrimitivesEXT[primID].gl_PrimitiveID = int(2*quadID);
+        gl_MeshPrimitivesEXT[primID + 1].gl_PrimitiveID = int(2*quadID + 1);
     }
 
 
     memoryBarrierShared();
     barrier();
 
+    SetMeshOutputsEXT(vertCount, primCount);
 
-
+    // Statistics
     if(gl_LocalInvocationID.x == 0){
-
-        // to fix
-        SetMeshOutputsEXT(MESHLETS_PER_MESH_WORKGROUP * MESHLET_LENGTH * MESHLET_LENGTH, primCounter);
-
-        atomicAdd(renderStatistics.statistics.PrimitiveCount, primCounter);
+        atomicAdd(renderStatistics.statistics.PrimitiveCount, primCount);
         atomicAdd(renderStatistics.statistics.MeshShaderInvocations, meshShaderInvocations);
     }
-    */
 }

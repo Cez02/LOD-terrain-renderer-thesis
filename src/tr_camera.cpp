@@ -157,11 +157,6 @@ void Camera::HandleMovement(float deltaTime, GLFWwindow *window)
     if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
         m_Position = glm::rotate(glm::identity<glm::quat>(), deltaTime * angleToEarthRatio * playerSpeed, getForwardVector()) * glm::vec4(m_Position, 1.0);
 
-    // if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS)
-    //     m_Position += getUpVector()  * deltaTime * playerSpeed;
-    // if (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS)
-    //     m_Position -= getUpVector()  * deltaTime * playerSpeed;
-
 
     if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS)
         m_Elevation += deltaTime * playerSpeed;
@@ -194,15 +189,9 @@ void Camera::HandleMovement(float deltaTime, GLFWwindow *window)
 
     playerRotation.y += rotateDelta;
     playerRotation.x += rotateDeltaX;
-    //
-    // if (playerRotation.x * 360.0 / 2*glm::two_pi<float>() < 60.0f)
-    //     playerRotation.x = 60.0f * glm::two_pi<float>() / 360.0f;
-    // else if(playerRotation.x * 360.0 / 2*glm::two_pi<float>() < -60.0f)
-    //     playerRotation.x = -60.0f * glm::two_pi<float>() / 360.0f;
 
     playerRotation.x = glm::clamp(playerRotation.x, -1.2f, 1.2f);
 
-    // log(std::to_string(playerRotation.x));
 
     auto newRot = glm::quat(glm::vec3(playerRotation.x, 0, 0));
 

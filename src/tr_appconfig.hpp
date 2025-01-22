@@ -24,7 +24,7 @@ public:
 
         uint32_t m_MaxTaskWorkgroupSizeTotal;
 
-        uint32_t m_MeshletsPerTaskInvocation = 2;
+        uint32_t m_MeshletsPerTaskInvocation = 20;
         uint32_t m_MeshletsPerMeshWorkgroup = 1;
 
     } m_MeshShaderConfig;
