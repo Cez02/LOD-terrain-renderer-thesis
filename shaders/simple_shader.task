@@ -30,9 +30,9 @@ layout( push_constant ) uniform constants
     layout (offset = 64)  vec3 ObservatorPosition;
     int padding;
      vec3 ObserverLookingDirection;
-    uint16_t MeshletCount;
     uint16_t HeightmapLength;
     uint BaseMeshletOffset;
+    uint MeshletCount;
     float Longitude;
     float Latitude;
     uint8_t LODLevel;
@@ -119,7 +119,7 @@ shared uint workgroupQuadCount;
 vec3 generalMeshletPosition(MeshletDescription meshlet) {
     uint heightmapIndex = meshlet.HeightmapDataOffset;
 
-    vec2 polarOffset = localPolarOffset(meshlet.Offset);
+    vec2 polarOffset = localPolarOffset(meshlet.Offset, PushConstants.HeightmapLength);
     vec3 vertA = polarToCartesian(OUT.Latitude + polarOffset.y, OUT.Longitude + polarOffset.x, float(int(heightmapData.m_Heights[heightmapIndex])));
 
     return vertA;
@@ -194,7 +194,7 @@ void main() {
             // Meshlet culling
             float observerHorizonDistance = observerHorizonDistance(OUT.observatorPosition);
 
-            bool render = !shouldCull(thisMeshlet, PushConstants.Latitude, PushConstants.Longitude, 0.0f, PushConstants.ObservatorPosition, observerHorizonDistance, PushConstants.ObserverLookingDirection); // early cull later here on meshlet
+            bool render = !shouldCull(thisMeshlet, PushConstants.Latitude, PushConstants.Longitude, 0.0f, PushConstants.ObservatorPosition, observerHorizonDistance, PushConstants.ObserverLookingDirection, PushConstants.HeightmapLength); // early cull later here on meshlet
 
             skip = skip || !render;
 

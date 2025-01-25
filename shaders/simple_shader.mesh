@@ -137,7 +137,7 @@ void processVertex(uvec2 vertexOffset, uint meshletID, MeshletDescription meshle
     uint heightmapIndex = meshlet.HeightmapDataOffset + vertexOffset.x + meshlet.Dimensions.x * vertexOffset.y;
     float height = float(int(heightmapData.m_Heights[heightmapIndex]));
 
-    vec3 vertPos = vertexToPolarToCartesian(meshlet.Offset + vertexOffset, IN.Latitude, IN.Longitude, height);
+    vec3 vertPos = vertexToPolarToCartesian(meshlet.Offset + vertexOffset, IN.Latitude, IN.Longitude, height, IN.heightmapLength);
 
     OUT[vertIndex].wPos = vertPos;
     OUT[vertIndex].wHeight = height;

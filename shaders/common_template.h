@@ -113,14 +113,14 @@ vec3 polarToCartesian(float lat, float lon, float height){
 
 #ifdef __cplusplus
 static
-vec2 localPolarOffset(uvec2 offset){
-    offset.y = 1200 - offset.y;
-    vec2 res = ((vec2)offset * PI ) * ( 1.0f / 180.0f * 1200.0f);
+vec2 localPolarOffset(uvec2 offset, float heightmapLength){
+    offset.y = heightmapLength - offset.y;
+    vec2 res = ((vec2)offset * PI ) * ( 1.0f / 180.0f * heightmapLength);
     return res;
 }
 
-inline vec3 vertexToPolarToCartesian(float lat, float lon){
-    vec2 res = PI / (180 * 1200) + vec2(lon, lat);
+inline vec3 vertexToPolarToCartesian(float lat, float lon, float heightmapLength){
+    vec2 res = PI / (180 * heightmapLength) + vec2(lon, lat);
 
     float r = 50000 + 2000 * 1 * 50000 / 6371000;
     return vec3( r * cos(res.y) * sin(res.x),
@@ -129,15 +129,15 @@ inline vec3 vertexToPolarToCartesian(float lat, float lon){
                   );
 }
 #else
-vec2 localPolarOffset(uvec2 offset){
-    offset.y = 1200 - offset.y;
-    vec2 res = (offset * PI ) / (180 * 1200);
+vec2 localPolarOffset(uvec2 offset, float heightmapLength){
+    offset.y = uint(heightmapLength) - offset.y;
+    vec2 res = (offset * PI ) / (180 * heightmapLength);
     return res;
 }
 
-vec3 vertexToPolarToCartesian(uvec2 offset, float lat, float lon, float height){
-    offset.y = 1200 - offset.y;
-    vec2 res = (offset * PI ) / (180 * 1200) + vec2(lon, lat);
+vec3 vertexToPolarToCartesian(uvec2 offset, float lat, float lon, float height, float heightmapLength){
+    offset.y = uint(heightmapLength) - offset.y;
+    vec2 res = (offset * PI ) / (180 * heightmapLength) + vec2(lon, lat);
 
     float r = 50000 + height * 1 * 50000 / 6371000;
     return vec3( r * cos(res.y) * sin(res.x),
@@ -151,8 +151,8 @@ vec3 vertexToPolarToCartesian(uvec2 offset, float lat, float lon, float height){
 #ifdef __cplusplus
 static
 #endif
-vec3 generalMeshletPosition(MeshletDescription meshlet, float latitude, float longitude, float height) {
-    vec2 polarOffset = localPolarOffset(meshlet.Offset);
+vec3 generalMeshletPosition(MeshletDescription meshlet, float latitude, float longitude, float height, float heightmapLength) {
+    vec2 polarOffset = localPolarOffset(meshlet.Offset, heightmapLength);
     return polarToCartesian(latitude + polarOffset.y, longitude + polarOffset.x, height);
 }
 
@@ -170,8 +170,8 @@ float observerHorizonDistance(vec3 observerPosition){
 #ifdef __cplusplus
 static
 #endif
-bool shouldCull(MeshletDescription meshletDescription, float latitude, float longitude, float height, vec3 observerPosition, vec3 observerLookingDirection) {
-    vec3 meshletPos = generalMeshletPosition(meshletDescription, latitude, longitude, height);
+bool shouldCull(MeshletDescription meshletDescription, float latitude, float longitude, float height, vec3 observerPosition, vec3 observerLookingDirection, float heightmapLength) {
+    vec3 meshletPos = generalMeshletPosition(meshletDescription, latitude, longitude, height, heightmapLength);
 
     float dir = dot(normalize(observerLookingDirection), normalize(meshletPos - observerPosition));
     //dir = 1.0f;
@@ -184,8 +184,8 @@ bool shouldCull(MeshletDescription meshletDescription, float latitude, float lon
 #ifdef __cplusplus
 static
 #endif
-bool shouldCull(MeshletDescription meshletDescription, float latitude, float longitude, float height, vec3 observerPosition, float observerHorizonDistanceCalculated, vec3 observerLookingDirection) {
-    vec3 meshletPos = generalMeshletPosition(meshletDescription, latitude, longitude, height);
+bool shouldCull(MeshletDescription meshletDescription, float latitude, float longitude, float height, vec3 observerPosition, float observerHorizonDistanceCalculated, vec3 observerLookingDirection, float heightmapLength) {
+    vec3 meshletPos = generalMeshletPosition(meshletDescription, latitude, longitude, height, heightmapLength);
 
     float dir = dot(normalize(observerLookingDirection), normalize(meshletPos - observerPosition));
     //dir = 1.0f;

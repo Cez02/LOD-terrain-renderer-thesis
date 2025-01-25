@@ -37,6 +37,7 @@ glm::vec3 parseGeoCoordinates(std::string input)
 struct StartupOptions
 {
     glm::vec3 m_ObserverStartingPosition = glm::vec3(8595, 33784, 35878);
+    string m_HeightmapsDirectory = "./heightmaps";
 };
 
 void parseOpts(int argc, char **argv, StartupOptions &opts)
@@ -53,12 +54,16 @@ void parseOpts(int argc, char **argv, StartupOptions &opts)
         if (opt.compare("--starting-position") == 0)
         {
             opts.m_ObserverStartingPosition = parseGeoCoordinates(std::string(argv[i + 1]));
-            log(glm::to_string(opts.m_ObserverStartingPosition));
+        }
+
+        if (opt.compare("--heightmaps-directory") == 0)
+        {
+            opts.m_HeightmapsDirectory = std::string(argv[i + 1]);
         }
     }
 }
 
-void setup(Renderer *mainRenderer, Window *mainWindow, GUIHandler *guiHandler, Texture *compassTexture, SceneData *scene)
+void setup(Renderer *mainRenderer, Window *mainWindow, GUIHandler *guiHandler, Texture *compassTexture, SceneData *scene, StartupOptions *startupOpts)
 {
     // Vulkan setup
     mainRenderer->initVulkan(mainWindow);
@@ -70,7 +75,7 @@ void setup(Renderer *mainRenderer, Window *mainWindow, GUIHandler *guiHandler, T
 
 
     // load all files in heightmaps directory
-    for (auto dir : std::filesystem::directory_iterator("./heightmaps"))
+    for (auto dir : std::filesystem::directory_iterator(startupOpts->m_HeightmapsDirectory))
     {
         if (!dir.is_directory())
             scene->getHeightmaps().emplace_back(dir.path());
@@ -133,7 +138,7 @@ int main(int argc, char **argv){
 
     mainRenderer.m_Camera.m_Position = opts.m_ObserverStartingPosition;
 
-    std::thread worker_thread(setup, &mainRenderer, &mainWindow, &guiHandler, &my_texture, &scene);
+    std::thread worker_thread(setup, &mainRenderer, &mainWindow, &guiHandler, &my_texture, &scene, &opts);
 
 
     float time = glfwGetTime();
